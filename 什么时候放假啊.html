@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<!-- saved from url=(0018)https://zzjh.me/t/ -->
+<html lang="zh-CN"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="https://zzjh.me/favicon.ico">
+    <title>什么时候放假啊</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+        body {
+            background-color: #f0f4f0;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: #fff;
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-top: 30px;
+        }
+        h1 {
+            color: #1e293b;
+            text-align: center;
+            font-size: 26px;
+            margin-bottom: 35px;
+            border-bottom: 2px solid #38bdf8;
+            padding-bottom: 15px;
+        }
+        .time-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .time-card {
+            flex: 1;
+            min-width: 220px;
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #38bdf8;
+        }
+        .time-card h3 {
+            color: #64748b;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .time-card p {
+            color: #1e293b;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .progress-container {
+            margin-bottom: 45px;
+        }
+        .progress-title {
+            color: #334155;
+            font-size: 18px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 28px;
+            background: #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+            border-radius: 14px;
+            transition: width 0.6s ease-in-out;
+        }
+        .progress-percent {
+            text-align: center;
+            color: #0284c7;
+            font-size: 50px;
+            font-weight: bold;
+        }
+        .countdown-container {
+            background: #f0fdfa;
+            padding: 25px;
+            border-radius: 12px;
+            border-left: 4px solid #10b981;
+            margin-bottom: 30px;
+        }
+        .countdown-title {
+            color: #065f46;
+            font-size: 18px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .countdown-box {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+        .countdown-item {
+            text-align: center;
+            background: #ecfdf5;
+            padding: 15px 10px;
+            border-radius: 8px;
+            min-width: 80px;
+        }
+        .countdown-num {
+            color: #047857;
+            font-size: 25px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        .countdown-text {
+            color: #065f46;
+            font-size: 14px;
+        }
+        /* 工作日倒计时样式 - 使用不同的边框颜色区分 */
+        .workday-countdown {
+            border-left-color: #8b5cf6;
+            background: #fcfafe;
+        }
+        .workday-countdown .countdown-title {
+            color: #5b21b6;
+        }
+        .workday-countdown .countdown-item {
+            background: #f3e8ff;
+        }
+        .workday-countdown .countdown-num {
+            color: #6d28d9;
+        }
+        .workday-countdown .countdown-text {
+            color: #5b21b6;
+        }
+        .workday-notes {
+            background: #fff8e1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #6b4b0a;
+            border-left: 3px solid #f59e0b;
+        }
+        .calc-note {
+            color: #64748b;
+            font-size: 14px;
+            text-align: center;
+            line-height: 1.6;
+            padding-top: 20px;
+            border-top: 1px dashed #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>2025-2026学年上学期进度</h1>
+
+        <!-- 关键时间展示 -->
+        <div class="time-group">
+            <div class="time-card">
+                <h3>学期起始时间</h3>
+                <p id="start-time">2025年09月01日 06:30:00</p>
+            </div>
+            <div class="time-card">
+                <h3>学期结束时间</h3>
+                <p id="end-time">2026年02月03日 17:00:00</p>
+            </div>
+            <div class="time-card">
+                <h3>当前系统时间</h3>
+                <p id="current-time">2025年09月26日 11:44:17</p>
+            </div>
+        </div>
+
+        <!-- 进度条展示 -->
+        <div class="progress-container">
+            <div class="progress-title">本学期已完成进度</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 16.2241%;"></div>
+            </div>
+            <div class="progress-percent" id="progress-percent">16.22405333%</div>
+        </div>
+
+        <!-- 倒计时展示 -->
+        <div class="countdown-container">
+            <div class="countdown-title">距离本学期结束还剩</div>
+            <div class="countdown-box">
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-days">130</div>
+                    <div class="countdown-text">天</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-hours">05</div>
+                    <div class="countdown-text">时</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-minutes">15</div>
+                    <div class="countdown-text">分</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-seconds">42</div>
+                    <div class="countdown-text">秒</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工作日倒计时展示 -->
+        <div class="countdown-container workday-countdown">
+            <div class="countdown-title">距离本学期结束还剩工作日</div>
+            <div class="countdown-box">
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-days">87</div>
+                    <div class="countdown-text">天</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-hours">05</div>
+                    <div class="countdown-text">时</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-minutes">15</div>
+                    <div class="countdown-text">分</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-seconds">42</div>
+                    <div class="countdown-text">秒</div>
+                </div>
+            </div>
+            <div class="workday-notes">
+                工作日计算规则：9月28日、10月11日上班；10月1日至10月8日休息；其余周六和周日正常休息
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 定义学期时间（时间戳：毫秒）
+        const termStart = new Date('2025-09-01T06:30:00').getTime(); // 开学时间
+        const termEnd = new Date('2026-02-03T17:00:00').getTime();   // 放假时间
+
+        // 特殊日期设置
+        const specialWorkingDays = new Set([
+            '2025-09-28',  // 9月28日上班
+            '2025-10-11'   // 10月11日上班
+        ]);
+        
+        const specialHolidays = new Set();
+        // 添加10月1日至10月8日休息
+        for (let i = 1; i <= 8; i++) {
+            specialHolidays.add(`2025-10-${i.toString().padStart(2, '0')}`);
+        }
+
+        // DOM元素
+        const currentTimeEl = document.getElementById('current-time');
+        const progressFillEl = document.getElementById('progress-fill');
+        const progressPercentEl = document.getElementById('progress-percent');
+        const countdownDaysEl = document.getElementById('countdown-days');
+        const countdownHoursEl = document.getElementById('countdown-hours');
+        const countdownMinutesEl = document.getElementById('countdown-minutes');
+        const countdownSecondsEl = document.getElementById('countdown-seconds');
+        
+        // 工作日倒计时DOM元素
+        const workdayDaysEl = document.getElementById('workday-days');
+        const workdayHoursEl = document.getElementById('workday-hours');
+        const workdayMinutesEl = document.getElementById('workday-minutes');
+        const workdaySecondsEl = document.getElementById('workday-seconds');
+
+        // 格式化时间：YYYY年MM月DD日 HH:mm:ss
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}年${month}月${day}日 ${hours}:${minutes}:${seconds}`;
+        }
+
+        // 格式化日期为YYYY-MM-DD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // 判断是否为工作日（考虑特殊日期）
+        function isWorkday(date) {
+            const dateStr = formatDate(date);
+            const day = date.getDay(); // 0是周日，6是周六
+            
+            // 检查是否为特殊工作日（即使是周末也上班）
+            if (specialWorkingDays.has(dateStr)) {
+                return true;
+            }
+            
+            // 检查是否为特殊节假日（即使是工作日也休息）
+            if (specialHolidays.has(dateStr)) {
+                return false;
+            }
+            
+            // 普通日期：周一至周五为工作日
+            return day !== 0 && day !== 6;
+        }
+
+        // 计算并更新进度
+        function updateProgress() {
+            const now = Date.now();
+            let progress = 0;
+
+            // 计算进度：早于开学为0，晚于放假为100%，中间按比例计算
+            if (now <= termStart) {
+                progress = 0;
+            } else if (now >= termEnd) {
+                progress = 100;
+            } else {
+                const totalDuration = termEnd - termStart;
+                const passedDuration = now - termStart;
+                progress = (passedDuration / totalDuration) * 100;
+            }
+
+            // 精确到小数点后5位
+            const progressFixed = progress.toFixed(5);
+            // 更新进度条和百分比文字
+            progressFillEl.style.width = `${progressFixed}%`;
+            progressPercentEl.textContent = `${progressFixed}%`;
+        }
+
+        // 计算并更新倒计时
+        function updateCountdown() {
+            const now = Date.now();
+            let remainingTime = 0;
+
+            // 计算剩余时间：早于开学显示开学倒计时，晚于放假显示0，中间显示放假倒计时
+            if (now <= termStart) {
+                remainingTime = termStart - now;
+            } else if (now >= termEnd) {
+                remainingTime = 0;
+            } else {
+                remainingTime = termEnd - now;
+            }
+
+            // 转换为天、时、分、秒
+            const days = Math.floor(remainingTime / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((remainingTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remainingTime % (1000 * 60)) / 1000);
+
+            // 补零并更新DOM
+            countdownDaysEl.textContent = String(days).padStart(2, '0');
+            countdownHoursEl.textContent = String(hours).padStart(2, '0');
+            countdownMinutesEl.textContent = String(minutes).padStart(2, '0');
+            countdownSecondsEl.textContent = String(seconds).padStart(2, '0');
+        }
+
+        // 计算并更新工作日倒计时
+        function updateWorkdayCountdown() {
+            const now = new Date();
+            let targetTime = new Date(termEnd);
+            let remainingTime = 0;
+
+            // 确定计算基准时间
+            if (now.getTime() <= termStart) {
+                targetTime = new Date(termStart);
+                remainingTime = targetTime - now.getTime();
+            } else if (now.getTime() >= termEnd) {
+                remainingTime = 0;
+            } else {
+                remainingTime = termEnd - now.getTime();
+            }
+
+            if (remainingTime <= 0) {
+                workdayDaysEl.textContent = '00';
+                workdayHoursEl.textContent = '00';
+                workdayMinutesEl.textContent = '00';
+                workdaySecondsEl.textContent = '00';
+                return;
+            }
+
+            // 计算剩余的工作日时间（考虑特殊日期）
+            let tempDate = new Date(now);
+            let workdayTime = 0;
+            const endDate = new Date(targetTime);
+
+            // 先计算整天数中的工作日
+            while (tempDate.toDateString() !== endDate.toDateString()) {
+                tempDate.setDate(tempDate.getDate() + 1);
+                if (isWorkday(tempDate)) {
+                    workdayTime += 24 * 60 * 60 * 1000; // 一天的毫秒数
+                }
+            }
+
+            // 计算当天剩余工作时间
+            const todayEnd = new Date(endDate);
+            todayEnd.setHours(23, 59, 59, 999);
+            const todayRemaining = todayEnd - endDate;
+            workdayTime -= todayRemaining;
+
+            // 计算起始日已过的工作时间
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0);
+            const todayPassed = now - startOfDay;
+            if (isWorkday(now)) {
+                workdayTime -= todayPassed;
+            }
+
+            // 确保不出现负数
+            workdayTime = Math.max(0, workdayTime);
+
+            // 转换为天、时、分、秒
+            const days = Math.floor(workdayTime / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((workdayTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((workdayTime % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((workdayTime % (1000 * 60)) / 1000);
+
+            // 补零并更新DOM
+            workdayDaysEl.textContent = String(days).padStart(2, '0');
+            workdayHoursEl.textContent = String(hours).padStart(2, '0');
+            workdayMinutesEl.textContent = String(minutes).padStart(2, '0');
+            workdaySecondsEl.textContent = String(seconds).padStart(2, '0');
+        }
+
+        // 主更新函数：每秒执行一次
+        function updateAll() {
+            const now = Date.now();
+            // 更新当前时间显示
+            currentTimeEl.textContent = formatTime(now);
+            // 更新进度
+            updateProgress();
+            // 更新倒计时
+            updateCountdown();
+            // 更新工作日倒计时
+            updateWorkdayCountdown();
+        }
+
+        // 初始化执行一次，之后每300毫秒更新
+        updateAll();
+        setInterval(updateAll, 300);
+    </script>
+
+
+<deepl-input-controller><template shadowrootmode="open"><link rel="stylesheet" href="chrome-extension://cofdbpoegempjloogbagkncekinflcnj/build/content.css"><div dir="ltr" style="visibility: initial !important;"><div class="dl-input-translation-container svelte-95aucy"><div></div></div></div></template></deepl-input-controller></body></html>

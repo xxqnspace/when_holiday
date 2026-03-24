@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>什么时候放假啊</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft YaHei", Arial, sans-serif; }
+        body { background-color: #f0f4f0; min-height: 100vh; padding: 20px; display: flex; justify-content: center; align-items: flex-start; }
+        .container { width: 100%; max-width: 1000px; background: #fff; padding: 35px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-top: 30px; }
+        h1 { color: #1e293b; text-align: center; font-size: 26px; margin-bottom: 35px; border-bottom: 2px solid #38bdf8; padding-bottom: 15px; }
+        .time-group { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; margin-bottom: 40px; }
+        .time-card { flex: 1; min-width: 220px; background: #f8fafc; padding: 20px; border-radius: 12px; border-left: 4px solid #38bdf8; }
+        .time-card h3 { color: #64748b; font-size: 16px; margin-bottom: 10px; }
+        .time-card p { color: #1e293b; font-size: 20px; font-weight: 600; }
+        .progress-container { margin-bottom: 45px; }
+        .progress-title { color: #334155; font-size: 18px; margin-bottom: 12px; text-align: center; }
+        .progress-bar { width: 100%; height: 28px; background: #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 15px; }
+        .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #0ea5e9); border-radius: 14px; transition: width 0.6s ease-in-out; }
+        .progress-percent { text-align: center; color: #0284c7; font-size: 50px; font-weight: bold; }
+        .countdown-container { background: #f0fdfa; padding: 25px; border-radius: 12px; border-left: 4px solid #10b981; margin-bottom: 30px; }
+        .countdown-title { color: #065f46; font-size: 18px; margin-bottom: 15px; text-align: center; }
+        .countdown-box { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; }
+        .countdown-item { text-align: center; background: #ecfdf5; padding: 15px 10px; border-radius: 8px; min-width: 80px; }
+        .countdown-num { color: #047857; font-size: 25px; font-weight: bold; margin-bottom: 3px; }
+        .countdown-text { color: #065f46; font-size: 14px; }
+        .workday-countdown { border-left-color: #8b5cf6; background: #fcfafe; }
+        .workday-countdown .countdown-title { color: #5b21b6; }
+        .workday-countdown .countdown-item { background: #f3e8ff; }
+        .workday-countdown .countdown-num { color: #6d28d9; }
+        .workday-countdown .countdown-text { color: #5b21b6; }
+        .workday-notes { background: #fff8e1; padding: 15px; border-radius: 8px; margin-top: 20px; font-size: 14px; color: #6b4b0a; border-left: 3px solid #f59e0b; }
+        .calc-note { color: #64748b; font-size: 14px; text-align: center; line-height: 1.6; padding-top: 20px; border-top: 1px dashed #e2e8f0; }
+        .calendar-container { margin-top: 40px; padding-top: 20px; border-top: 1px dashed #e2e8f0; }
+        .calendar-title { color: #334155; font-size: 18px; margin-bottom: 20px; text-align: center; }
+        .calendar-row { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
+        .month-calendar { flex: 1; min-width: 400px; }
+        .month-name { color: #1e293b; font-size: 16px; margin-bottom: 8px; padding-left: 5px; font-weight: 600; }
+        .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 3px; }
+        .weekday { text-align: center; font-size: 13px; color: #64748b; padding: 5px 0; }
+        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 4px; font-size: 16px; font-weight: 500; position: relative; min-height: 30px; }
+        .day-cell.other-month { color: #cbd5e1; background-color: #f8fafc; }
+        .day-cell.past { background-color: #dcfce7; }
+        .day-cell.future-holiday { background-color: #eff6ff; }
+        .day-cell.today { border: 2px solid #38bdf8; font-weight: bold; }
+        .day-cell.beyond-term { opacity: 0.3; }
+        .week-number { position: absolute; top: 1px; right: 1px; font-size: 8px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>2025-2026学年上学期进度</h1>
+        <div class="time-group">
+            <div class="time-card">
+                <h3>学期起始时间</h3>
+                <p id="start-time">2025年09月01日 06:30:00</p>
+            </div>
+            <div class="time-card">
+                <h3>学期结束时间</h3>
+                <p id="end-time">2026年02月03日 17:00:00</p>
+            </div>
+            <div class="time-card">
+                <h3>当前系统时间</h3>
+                <p id="current-time">2025年09月30日 00:00:00</p>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-title">本学期已完成进度</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-percent" id="progress-percent"></div>
+        </div>
+        <div class="countdown-container">
+            <div class="countdown-title">距离本学期结束还剩（自然日）</div>
+            <div class="countdown-box">
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-days"></div>
+                    <div class="countdown-text">天</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-hours"></div>
+                    <div class="countdown-text">时</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-minutes"></div>
+                    <div class="countdown-text">分</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="countdown-seconds"></div>
+                    <div class="countdown-text">秒</div>
+                </div>
+            </div>
+        </div>
+        <div class="countdown-container workday-countdown">
+            <div class="countdown-title">距离本学期结束还剩（工作日）</div>
+            <div class="countdown-box">
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-days"></div>
+                    <div class="countdown-text">天</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-hours"></div>
+                    <div class="countdown-text">时</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-minutes"></div>
+                    <div class="countdown-text">分</div>
+                </div>
+                <div class="countdown-item">
+                    <div class="countdown-num" id="workday-seconds"></div>
+                    <div class="countdown-text">秒</div>
+                </div>
+            </div>
+            <div class="workday-notes">
+                工作日计算规则：9月28日、10月11日上班；10月1日至10月8日休息；其余周六和周日正常休息
+            </div>
+        </div>
+        <div class="calendar-container">
+            <div class="calendar-title">2025年9月-2026年2月 学期日历</div>
+            <div id="calendars-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // 学期核心时间配置（毫秒时间戳）
+        const termStart = new Date('2025-09-01T06:30:00').getTime();
+        const termEnd = new Date('2026-02-03T17:00:00').getTime();
+        const calendarEndDate = new Date('2026-02-08');
+
+        // 日期规则常量配置（统一管理，易维护）
+        const DateConfig = {
+            specialWorkingDays: new Set(['2025-09-28', '2025-10-11']), // 周末补班
+            specialHolidays: new Set([                                 // 法定节假日
+                '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04',
+                '2025-10-05', '2025-10-06', '2025-10-07', '2025-10-08',
+                '2026-01-01'
+            ]),
+            ONE_DAY: 86400000,
+            ONE_HOUR: 3600000,
+            ONE_MINUTE: 60000,
+            ONE_SECOND: 1000
+        };
+
+        // DOM元素获取
+        const dom = {
+            currentTime: document.getElementById('current-time'),
+            progressFill: document.getElementById('progress-fill'),
+            progressPercent: document.getElementById('progress-percent'),
+            cdDays: document.getElementById('countdown-days'),
+            cdHours: document.getElementById('countdown-hours'),
+            cdMinutes: document.getElementById('countdown-minutes'),
+            cdSeconds: document.getElementById('countdown-seconds'),
+            wdDays: document.getElementById('workday-days'),
+            wdHours: document.getElementById('workday-hours'),
+            wdMinutes: document.getElementById('workday-minutes'),
+            wdSeconds: document.getElementById('workday-seconds')
+        };
+
+        // ========== 工具函数 ==========
+        // 格式化时间：YYYY年MM月DD日 HH:mm:ss
+        function formatTime(timestamp) {
+            const d = new Date(timestamp);
+            return `${d.getFullYear()}年${String(d.getMonth()+1).padStart(2,0)}月${String(d.getDate()).padStart(2,0)}日 ${String(d.getHours()).padStart(2,0)}:${String(d.getMinutes()).padStart(2,0)}:${String(d.getSeconds()).padStart(2,0)}`;
+        }
+
+        // 格式化日期：YYYY-MM-DD（核心判重格式）
+        function formatDate(date) {
+            return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,0)}-${String(date.getDate()).padStart(2,0)}`;
+        }
+
+        // ========== 核心：判断是否为工作日 ==========
+        function isWorkday(date) {
+            const dateStr = formatDate(date);
+            const week = date.getDay(); // 0=周日 1-6=周一至周六
+            
+            // 优先级1：特殊日期覆盖一切规则
+            if (DateConfig.specialWorkingDays.has(dateStr)) return true;
+            if (DateConfig.specialHolidays.has(dateStr)) return false;
+            
+            // 优先级2：常规规则 - 周一至周五为工作日
+            return week >= 1 && week <= 5;
+        }
+
+        // ========== 修复核心：精准计算剩余工作日毫秒数 ==========
+        function getRemainingWorkdayMs() {
+            const now = new Date();
+            const endDate = new Date(termEnd);
+            
+            // 边界判断：未开学/已放假，直接返回0
+            if (now.getTime() >= termEnd) return 0;
+            if (now.getTime() <= termStart) return 0;
+
+            let totalWorkMs = 0;
+            const tempDate = new Date(now); // 临时遍历日期，不篡改原对象
+            tempDate.setHours(0, 0, 0, 0);  // 重置到当天凌晨0点
+
+            // 遍历从今日到结束日前一天，统计完整工作日
+            while (tempDate.getTime() < new Date(endDate.setHours(0,0,0,0))) {
+                if (isWorkday(tempDate)) {
+                    // 今日：计算【当前时间 → 24:00】的剩余毫秒数
+                    if (tempDate.toDateString() === new Date(now).toDateString()) {
+                        const todayEnd = new Date(tempDate);
+                        todayEnd.setHours(23,59,59,999);
+                        totalWorkMs += todayEnd.getTime() - now.getTime();
+                    } 
+                    // 其他完整工作日：直接加一整天毫秒数
+                    else {
+                        totalWorkMs += DateConfig.ONE_DAY;
+                    }
+                }
+                tempDate.setDate(tempDate.getDate() + 1); // 下一天
+            }
+
+            // 计算【结束日0:00 → 结束时间17:00】的毫秒数（如果结束日是工作日）
+            endDate.setHours(17,0,0,0);
+            const endDay = new Date(termEnd);
+            endDay.setHours(0,0,0,0);
+            if (isWorkday(endDay)) {
+                totalWorkMs += termEnd - endDay.getTime();
+            }
+
+            return Math.max(0, totalWorkMs); // 确保数值非负
+        }
+
+        // ========== 自然日倒计时更新 ==========
+        function updateNormalCountdown() {
+            const now = Date.now();
+            const remain = now >= termEnd ? 0 : termEnd - now;
+            
+            dom.cdDays.textContent = String(Math.floor(remain / DateConfig.ONE_DAY)).padStart(2,0);
+            dom.cdHours.textContent = String(Math.floor((remain % DateConfig.ONE_DAY)/DateConfig.ONE_HOUR)).padStart(2,0);
+            dom.cdMinutes.textContent = String(Math.floor((remain % DateConfig.ONE_HOUR)/DateConfig.ONE_MINUTE)).padStart(2,0);
+            dom.cdSeconds.textContent = String(Math.floor((remain % DateConfig.ONE_MINUTE)/DateConfig.ONE_SECOND)).padStart(2,0);
+        }
+
+        // ========== 修复后：工作日倒计时更新 ==========
+        function updateWorkdayCountdown() {
+            const workMs = getRemainingWorkdayMs();
+            
+            // 毫秒数转 天/时/分/秒
+            const days = Math.floor(workMs / DateConfig.ONE_DAY);
+            const hours = Math.floor((workMs % DateConfig.ONE_DAY) / DateConfig.ONE_HOUR);
+            const minutes = Math.floor((workMs % DateConfig.ONE_HOUR) / DateConfig.ONE_MINUTE);
+            const seconds = Math.floor((workMs % DateConfig.ONE_MINUTE) / DateConfig.ONE_SECOND);
+            
+            // 更新DOM，补零对齐
+            dom.wdDays.textContent = String(days).padStart(2, 0);
+            dom.wdHours.textContent = String(hours).padStart(2, 0);
+            dom.wdMinutes.textContent = String(minutes).padStart(2, 0);
+            dom.wdSeconds.textContent = String(seconds).padStart(2, 0);
+        }
+
+        // ========== 学期进度更新 ==========
+        function updateProgress() {
+            const now = Date.now();
+            let progress = 0;
+            if (now > termStart && now < termEnd) {
+                progress = ((now - termStart) / (termEnd - termStart)) * 100;
+            } else if (now >= termEnd) progress = 100;
+            
+            const pct = progress.toFixed(6);//百分比小数点后位数
+            dom.progressFill.style.width = `${pct}%`;
+            dom.progressPercent.textContent = `${pct}%`;
+        }
+
+        // ========== 日历相关函数（保留原功能，无修改） ==========
+        function getTermWeekNumber(date) {
+            const termStartDate = new Date('2025-08-31');
+            if (date < termStartDate) return 0;
+            const dayDiff = Math.floor((date - termStartDate)/DateConfig.ONE_DAY);
+            const startWeek = termStartDate.getDay() ||7;
+            return Math.floor((dayDiff + startWeek -1)/7)+1;
+        }
+        function generateCalendar(year, month, today, isFeb26=false) {
+            const firstDay = new Date(year, month,1);
+            const lastDay = isFeb26 ? new Date(2026,1,8) : new Date(year,month+1,0);
+            const daysInMonth = lastDay.getDate();
+            let firstWeek = firstDay.getDay(); firstWeek = firstWeek===0?7:firstWeek;
+            const prevDays = firstWeek -1;
+
+            const el = document.createElement('div'); el.className='month-calendar';
+            const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+            el.innerHTML = `<div class="month-name">${year}年${monthNames[month]}</div><div class="weekdays">${['一','二','三','四','五','六','日'].map(n=>`<div class="weekday">${n}</div>`).join('')}</div><div class="days-grid"></div>`;
+            const grid = el.querySelector('.days-grid');
+
+            const prevM = month===0?11:month-1; const prevY = month===0?year-1:year;
+            const prevMLast = new Date(prevY,prevM+1,0).getDate();
+            for(let i=0;i<prevDays;i++) grid.appendChild(createDayCell(prevY,prevM,prevMLast-prevDays+i+1,today,true));
+            for(let d=1;d<=daysInMonth;d++) grid.appendChild(createDayCell(year,month,d,today,false,isFeb26));
+            const total = prevDays+daysInMonth; const nextDays =7-(total%7||7);
+            if(nextDays<7&&!isFeb26){
+                const nextM=month===11?0:month+1; const nextY=month===11?year+1:year;
+                for(let d=1;d<=nextDays;d++) grid.appendChild(createDayCell(nextY,nextM,d,today,true));
+            }
+            return el;
+        }
+        function createDayCell(y,m,d,today,isOther,isFeb26){
+            const date = new Date(y,m,d); const dateStr=formatDate(date);
+            const isToday = date.toDateString()===today.toDateString();
+            const isPast = date < today && !isToday;
+            const isHoliday = !isWorkday(date);
+            const isBeyond = isFeb26 && d>8;
+
+            const el = document.createElement('div'); el.className='day-cell';
+            if(isOther) el.classList.add('other-month');
+            else if(isBeyond) el.classList.add('beyond-term');
+            else{ if(isPast) el.classList.add('past'); else if(isHoliday) el.classList.add('future-holiday'); }
+            if(isToday) el.classList.add('today');
+            el.innerHTML = `<span>${d}</span>${(date.getDay()===1||(date.getDay()===0&&isOther))&&date>=new Date('2025-09-01')?`<span class="week-number">W${getTermWeekNumber(date)}</span>`:''}`;
+            return el;
+        }
+        function renderCalendars(){
+            const container = document.getElementById('calendars-container'); container.innerHTML='';
+            const today = new Date(); today.setHours(0,0,0,0);
+            const months = [{y:2025,m:8},{y:2025,m:9},{y:2025,m:10},{y:2025,m:11},{y:2026,m:0},{y:2026,m:1,isFeb:true}];
+            for(let i=0;i<months.length;i+=2){
+                const row = document.createElement('div'); row.className='calendar-row';
+                const m1=months[i]; row.appendChild(generateCalendar(m1.y,m1.m,today,m1.isFeb));
+                if(i+1<months.length){ const m2=months[i+1]; row.appendChild(generateCalendar(m2.y,m2.m,today,m2.isFeb)); }
+                container.appendChild(row);
+            }
+        }
+
+        // ========== 全局更新入口 ==========
+        function updateAll() {
+            const now = Date.now();
+            dom.currentTime.textContent = formatTime(now);
+            updateProgress();
+            updateNormalCountdown();
+            updateWorkdayCountdown(); // 修复后可正常执行
+        }
+
+        // ========== 初始化 ==========
+        updateAll();
+        setInterval(updateAll, 1000); // 每秒更新一次，性能更优
+        renderCalendars();
+        setTimeout(()=>{ renderCalendars(); setInterval(renderCalendars, DateConfig.ONE_DAY); }, new Date(new Date().setDate(new Date().getDate()+1)).setHours(0,0,0,0) - Date.now());
+    </script>
+</body>
+</html>
