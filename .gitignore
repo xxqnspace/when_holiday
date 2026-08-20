@@ -1,0 +1,4 @@
+# 运行时数据（含用户密码哈希等敏感信息，不入库）
+data/db.json.php
+data/*.tmp
+data/.lock

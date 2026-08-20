@@ -1,12 +1,18 @@
 <?php
 /**
- * 管理面板
+ * 管理面板（JSON 存储版）
  * 需要登录才能访问
  */
 
-require_once 'db.php';
+require_once 'storage.php';
 
 session_start();
+
+// 生成 CSRF token（写操作防护）
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
 
 // 如果已登录，直接显示面板；否则显示登录页
 $loggedIn = !empty($_SESSION['user_id']);
@@ -15,13 +21,18 @@ $isAdmin = ($_SESSION['role'] ?? '') === 'admin';
 // 处理登录表单提交
 $loginError = '';
 if (!$loggedIn && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    if ($username && $password) {
-        try {
-            $db = DB::getInstance();
-            $user = $db->queryOne("SELECT * FROM users WHERE username = ?", [$username]);
+    // CSRF 校验
+    $submittedToken = $_POST['csrf_token'] ?? '';
+    if (!hash_equals($csrfToken, $submittedToken)) {
+        $loginError = '安全校验失败，请刷新页面重试';
+    } else {
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        if ($username && $password) {
+            $data = json_load();
+            $user = json_find_user($data, $username);
             if ($user && password_verify($password, $user['password'])) {
+                session_regenerate_id(true);
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['role'] = $user['role'];
@@ -33,11 +44,9 @@ if (!$loggedIn && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login']
             } else {
                 $loginError = '用户名或密码错误';
             }
-        } catch (Exception $e) {
-            $loginError = '数据库连接失败：' . $e->getMessage();
+        } else {
+            $loginError = '请输入用户名和密码';
         }
-    } else {
-        $loginError = '请输入用户名和密码';
     }
 }
 
@@ -51,6 +60,7 @@ if (!$loggedIn):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icons/icon-96.png" type="image/png">
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <title>管理面板 - 登录</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -95,12 +105,13 @@ if (!$loggedIn):
 </head>
 <body>
 <div class="login-card">
-    <h1>🔐 管理面板</h1>
+    <h1><i class="fa-solid fa-lock"></i> 管理面板</h1>
     <p class="subtitle">学期倒计时系统</p>
     <?php if ($loginError): ?>
         <div class="error"><?php echo htmlspecialchars($loginError); ?></div>
     <?php endif; ?>
     <form method="post">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div class="form-group">
             <label>用户名</label>
             <input type="text" name="username" placeholder="请输入用户名" required autofocus>
@@ -111,7 +122,7 @@ if (!$loggedIn):
         </div>
         <button type="submit" name="login" class="btn-login">登 录</button>
     </form>
-    <div class="back-link"><a href="index.php">← 返回首页</a></div>
+    <div class="back-link"><a href="index.php"><i class="fa-solid fa-arrow-left"></i> 返回首页</a></div>
 </div>
 </body>
 </html>
@@ -126,6 +137,7 @@ endif; // 登录页结束
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icons/icon-96.png" type="image/png">
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <meta name="theme-color" content="#1e293b">
     <title>管理面板 - 学期倒计时</title>
     <style>
@@ -319,20 +331,20 @@ endif; // 登录页结束
 <!-- 侧边栏 -->
 <div class="sidebar">
     <div class="sidebar-logo">
-        <h2>📊 管理面板</h2>
+        <h2><i class="fa-solid fa-chart-simple"></i> 管理面板</h2>
         <div class="ver">学期倒计时 v2.0</div>
     </div>
-    <div class="sidebar-toggle" onclick="toggleSidebar()">☰</div>
+    <div class="sidebar-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
     <div class="sidebar-nav">
         <?php if ($isAdmin): ?>
         <div class="nav-section">系统管理</div>
-        <a class="active" data-tab="tab-users"><span class="icon">👥</span> <span>用户管理</span></a>
-        <a data-tab="tab-semester"><span class="icon">📅</span> <span>学期配置</span></a>
-        <a data-tab="tab-appearance"><span class="icon">🎨</span> <span>界面配色</span></a>
-        <a data-tab="tab-background"><span class="icon">🖼</span> <span>背景设置</span></a>
-        <a data-tab="tab-announcement"><span class="icon">📢</span> <span>公告管理</span></a>
+        <a class="active" data-tab="tab-users"><span class="icon"><i class="fa-solid fa-users"></i></span> <span>用户管理</span></a>
+        <a data-tab="tab-semester"><span class="icon"><i class="fa-solid fa-calendar-days"></i></span> <span>学期配置</span></a>
+        <a data-tab="tab-appearance"><span class="icon"><i class="fa-solid fa-palette"></i></span> <span>界面配色</span></a>
+        <a data-tab="tab-background"><span class="icon"><i class="fa-solid fa-image"></i></span> <span>背景设置</span></a>
+        <a data-tab="tab-announcement"><span class="icon"><i class="fa-solid fa-bullhorn"></i></span> <span>公告管理</span></a>
         <?php endif; ?>
-        <a data-tab="tab-password"><span class="icon">🔒</span> <span>修改密码</span></a>
+        <a data-tab="tab-password"><span class="icon"><i class="fa-solid fa-key"></i></span> <span>修改密码</span></a>
     </div>
     <div class="sidebar-footer">
         <div class="user-info">
@@ -421,7 +433,7 @@ endif; // 登录页结束
             <div class="tag-list" id="workday-tags"></div>
         </div>
         <div style="margin-top:12px;">
-            <button class="btn btn-success" onclick="saveSemester()">💾 保存学期配置</button>
+            <button class="btn btn-success" onclick="saveSemester()"><i class="fa-solid fa-floppy-disk"></i> 保存学期配置</button>
         </div>
     </div>
 
@@ -463,7 +475,7 @@ endif; // 登录页结束
                 <p style="margin-top:12px;font-size:2rem;font-weight:650;color:var(--preview-percent);" id="preview-percent">65.432100%</p>
             </div>
         </div>
-        <button class="btn btn-success" onclick="saveAppearance()">💾 保存界面配置</button>
+        <button class="btn btn-success" onclick="saveAppearance()"><i class="fa-solid fa-floppy-disk"></i> 保存界面配置</button>
     </div>
 
     <!-- ==================== 背景设置 Tab ==================== -->
@@ -509,7 +521,7 @@ endif; // 登录页结束
             </div>
             <p class="hint">毛玻璃透明度越高，卡片越不透明。图片透明度越高，背景图越清晰。</p>
         </div>
-        <button class="btn btn-success" onclick="saveBackground()">💾 保存背景配置</button>
+        <button class="btn btn-success" onclick="saveBackground()"><i class="fa-solid fa-floppy-disk"></i> 保存背景配置</button>
     </div>
 
     <!-- ==================== 公告管理 Tab ==================== -->
@@ -527,7 +539,7 @@ endif; // 登录页结束
             </div>
             <p class="hint">留空时间表示不限。公告以顶部消息条展示，支持 **粗体**、*斜体*、`代码`、[链接](url) 等 Markdown 语法。</p>
             <div style="margin-top:12px;">
-                <button class="btn btn-primary" onclick="saveAnnouncement()">💾 保存公告</button>
+                <button class="btn btn-primary" onclick="saveAnnouncement()"><i class="fa-solid fa-floppy-disk"></i> 保存公告</button>
             </div>
         </div>
         <div class="card">
@@ -539,8 +551,7 @@ endif; // 登录页结束
                     <p class="hint">公告展示后自动关闭的秒数，默认 5 秒。设为 0 表示不自动关闭。</p>
                 </div>
             </div>
-            <button class="btn btn-primary" onclick="saveAnnouncementAutoClose()">💾 保存设置</button>
-        </div>
+            <button class="btn btn-primary" onclick="saveAnnouncementAutoClose()"><i class="fa-solid fa-floppy-disk"></i> 保存设置</button>
         </div>
         <div class="card">
             <div class="card-title">公告列表</div>
@@ -568,6 +579,9 @@ endif; // 登录页结束
 </div>
 
 <script>
+// ==================== 全局配置 ====================
+window._csrfToken = <?php echo json_encode($csrfToken); ?>;
+
 // ==================== 工具函数 ====================
 function showToast(msg, type) {
     const t = document.getElementById('toast');
@@ -580,6 +594,7 @@ function showToast(msg, type) {
 async function api(action, data) {
     const formData = new FormData();
     formData.append('action', action);
+    formData.append('csrf_token', window._csrfToken || '');
     if (data) {
         Object.entries(data).forEach(([k, v]) => formData.append(k, v));
     }
@@ -734,8 +749,13 @@ function renderTags(containerId, list, type) {
 }
 
 async function saveSemester() {
-    const startDate = document.getElementById('sem-start').value.replace('T', ' ') + ':00';
-    const endDate = document.getElementById('sem-end').value.replace('T', ' ') + ':00';
+    const startVal = document.getElementById('sem-start').value;
+    const endVal = document.getElementById('sem-end').value;
+    if (!startVal || !endVal) {
+        return showToast('请先填写学期开始和结束时间', 'error');
+    }
+    const startDate = startVal.replace('T', ' ') + ':00';
+    const endDate = endVal.replace('T', ' ') + ':00';
     const json = await api('save_settings', {
         settings: JSON.stringify({
             start_date: startDate,
@@ -871,7 +891,7 @@ async function loadAnnouncements() {
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.content || '')}</td>
                     <td>${a.show_from || '-'}</td>
                     <td>${a.show_until || '-'}</td>
-                    <td>${a.is_active == 1 ? '✅ 启用' : '⏸ 停用'}</td>
+                    <td>${a.is_active == 1 ? '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> 启用' : '<i class="fa-solid fa-circle-pause" style="color:#94a3b8;"></i> 停用'}</td>
                     <td>${a.created_at || '-'}</td>
                     <td>
                         <button class="btn btn-outline btn-sm" onclick="editAnnouncement(${a.id})">编辑</button>
@@ -889,10 +909,13 @@ async function loadAnnouncements() {
 }
 
 async function saveAnnouncement() {
+    const fromVal = document.getElementById('ann-show-from').value;
+    const untilVal = document.getElementById('ann-show-until').value;
     const data = {
         content: document.getElementById('ann-content').value,
-        show_from: document.getElementById('ann-show-from').value.replace('T', ' ') + ':00',
-        show_until: document.getElementById('ann-show-until').value.replace('T', ' ') + ':00',
+        // 为空时传空字符串，后端会自动转为 null（表示不限时间）
+        show_from: fromVal ? fromVal.replace('T', ' ') + ':00' : '',
+        show_until: untilVal ? untilVal.replace('T', ' ') + ':00' : '',
         is_active: document.getElementById('ann-active').value,
     };
     // 检查是否有正在编辑的公告 ID

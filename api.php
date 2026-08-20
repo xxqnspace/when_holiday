@@ -1,13 +1,18 @@
 <?php
 /**
- * API 接口
+ * API 接口（JSON 存储版）
  * 所有接口返回 JSON 格式
  */
 
-require_once 'db.php';
+require_once 'storage.php';
 
 header('Content-Type: application/json; charset=utf-8');
 session_start();
+
+// 生成/获取 CSRF token
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 // 获取请求参数
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
@@ -47,9 +52,21 @@ function requireAdmin()
     }
 }
 
+/**
+ * CSRF 校验（写操作必须携带 token）
+ */
+function requireCsrf()
+{
+    $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        jsonResponse(false, '安全校验失败，请刷新页面重试');
+    }
+}
+
 // ==================== 认证接口 ====================
 
 if ($action === 'login' && $method === 'POST') {
+    requireCsrf();
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -57,23 +74,20 @@ if ($action === 'login' && $method === 'POST') {
         jsonResponse(false, '用户名和密码不能为空');
     }
 
-    try {
-        $db = DB::getInstance();
-        $user = $db->queryOne("SELECT * FROM users WHERE username = ?", [$username]);
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
-            jsonResponse(true, '登录成功', [
-                'id'       => $user['id'],
-                'username' => $user['username'],
-                'role'     => $user['role'],
-            ]);
-        }
-        jsonResponse(false, '用户名或密码错误');
-    } catch (Exception $e) {
-        jsonResponse(false, '登录失败：' . $e->getMessage());
+    $data = json_load();
+    $user = json_find_user($data, $username);
+    if ($user && password_verify($password, $user['password'])) {
+        session_regenerate_id(true);
+        $_SESSION['user_id']    = $user['id'];
+        $_SESSION['username']   = $user['username'];
+        $_SESSION['role']       = $user['role'];
+        jsonResponse(true, '登录成功', [
+            'id'       => $user['id'],
+            'username' => $user['username'],
+            'role'     => $user['role'],
+        ]);
     }
+    jsonResponse(false, '用户名或密码错误');
 }
 
 if ($action === 'logout') {
@@ -94,6 +108,7 @@ if ($action === 'check_auth') {
 
 if ($action === 'change_password' && $method === 'POST') {
     requireLogin();
+    requireCsrf();
     $oldPassword = $_POST['old_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
 
@@ -101,35 +116,43 @@ if ($action === 'change_password' && $method === 'POST') {
         jsonResponse(false, '新密码至少6位');
     }
 
-    try {
-        $db = DB::getInstance();
-        $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-        if (!password_verify($oldPassword, $user['password'])) {
-            jsonResponse(false, '原密码错误');
-        }
-        $newHash = password_hash($newPassword, PASSWORD_BCRYPT);
-        $db->execute("UPDATE users SET password = ? WHERE id = ?", [$newHash, $_SESSION['user_id']]);
-        jsonResponse(true, '密码修改成功');
-    } catch (Exception $e) {
-        jsonResponse(false, '修改失败：' . $e->getMessage());
+    $data = json_load();
+    $user = json_find_user_by_id($data, intval($_SESSION['user_id']));
+    if (!$user || !password_verify($oldPassword, $user['password'])) {
+        jsonResponse(false, '原密码错误');
     }
+    $newHash = password_hash($newPassword, PASSWORD_BCRYPT);
+    json_update(function (&$data) use ($newHash) {
+        foreach ($data['users'] as &$u) {
+            if ($u['id'] == $_SESSION['user_id']) {
+                $u['password'] = $newHash;
+                break;
+            }
+        }
+        unset($u);
+    });
+    jsonResponse(true, '密码修改成功');
 }
 
 // ==================== 用户管理接口（管理员） ====================
 
 if ($action === 'get_users') {
     requireAdmin();
-    try {
-        $db = DB::getInstance();
-        $users = $db->query("SELECT id, username, role, created_at FROM users ORDER BY id ASC");
-        jsonResponse(true, '', $users);
-    } catch (Exception $e) {
-        jsonResponse(false, $e->getMessage());
-    }
+    $data = json_load();
+    $users = array_map(function ($u) {
+        return [
+            'id'         => $u['id'],
+            'username'   => $u['username'],
+            'role'       => $u['role'],
+            'created_at' => $u['created_at'],
+        ];
+    }, $data['users']);
+    jsonResponse(true, '', $users);
 }
 
 if ($action === 'create_user' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $role = $_POST['role'] ?? 'user';
@@ -141,22 +164,26 @@ if ($action === 'create_user' && $method === 'POST') {
         jsonResponse(false, '角色无效');
     }
 
-    try {
-        $db = DB::getInstance();
-        $exists = $db->queryOne("SELECT id FROM users WHERE username = ?", [$username]);
-        if ($exists) {
-            jsonResponse(false, '用户名已存在');
-        }
-        $hash = password_hash($password, PASSWORD_BCRYPT);
-        $db->execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", [$username, $hash, $role]);
-        jsonResponse(true, '用户创建成功');
-    } catch (Exception $e) {
-        jsonResponse(false, '创建失败：' . $e->getMessage());
+    $data = json_load();
+    if (json_find_user($data, $username)) {
+        jsonResponse(false, '用户名已存在');
     }
+    $hash = password_hash($password, PASSWORD_BCRYPT);
+    json_update(function (&$data) use ($username, $hash, $role) {
+        $data['users'][] = [
+            'id'         => $data['next_user_id']++,
+            'username'   => $username,
+            'password'   => $hash,
+            'role'       => $role,
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+    });
+    jsonResponse(true, '用户创建成功');
 }
 
 if ($action === 'update_user' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $userId = intval($_POST['user_id'] ?? 0);
     $role = $_POST['role'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
@@ -167,26 +194,29 @@ if ($action === 'update_user' && $method === 'POST') {
     if (!in_array($role, ['admin', 'user'])) {
         jsonResponse(false, '角色无效');
     }
-
-    try {
-        $db = DB::getInstance();
-        if ($newPassword !== '') {
-            if (strlen($newPassword) < 6) {
-                jsonResponse(false, '新密码至少6位');
-            }
-            $hash = password_hash($newPassword, PASSWORD_BCRYPT);
-            $db->execute("UPDATE users SET role = ?, password = ? WHERE id = ?", [$role, $hash, $userId]);
-        } else {
-            $db->execute("UPDATE users SET role = ? WHERE id = ?", [$role, $userId]);
-        }
-        jsonResponse(true, '用户更新成功');
-    } catch (Exception $e) {
-        jsonResponse(false, '更新失败：' . $e->getMessage());
+    if ($newPassword !== '' && strlen($newPassword) < 6) {
+        jsonResponse(false, '新密码至少6位');
     }
+
+    $newHash = $newPassword !== '' ? password_hash($newPassword, PASSWORD_BCRYPT) : null;
+    json_update(function (&$data) use ($userId, $role, $newHash) {
+        foreach ($data['users'] as &$u) {
+            if ($u['id'] == $userId) {
+                $u['role'] = $role;
+                if ($newHash) {
+                    $u['password'] = $newHash;
+                }
+                break;
+            }
+        }
+        unset($u);
+    });
+    jsonResponse(true, '用户更新成功');
 }
 
 if ($action === 'delete_user' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $userId = intval($_POST['user_id'] ?? 0);
     if ($userId <= 0) {
         jsonResponse(false, '用户ID无效');
@@ -196,33 +226,24 @@ if ($action === 'delete_user' && $method === 'POST') {
         jsonResponse(false, '不能删除自己的账号');
     }
 
-    try {
-        $db = DB::getInstance();
-        $db->execute("DELETE FROM users WHERE id = ?", [$userId]);
-        jsonResponse(true, '用户已删除');
-    } catch (Exception $e) {
-        jsonResponse(false, '删除失败：' . $e->getMessage());
-    }
+    json_update(function (&$data) use ($userId) {
+        $data['users'] = array_values(array_filter($data['users'], function ($u) use ($userId) {
+            return $u['id'] != $userId;
+        }));
+    });
+    jsonResponse(true, '用户已删除');
 }
 
 // ==================== 配置接口 ====================
 
 if ($action === 'get_settings') {
-    try {
-        $db = DB::getInstance();
-        $rows = $db->query("SELECT setting_key, setting_value FROM settings");
-        $settings = [];
-        foreach ($rows as $row) {
-            $settings[$row['setting_key']] = $row['setting_value'];
-        }
-        jsonResponse(true, '', $settings);
-    } catch (Exception $e) {
-        jsonResponse(false, $e->getMessage());
-    }
+    $data = json_load();
+    jsonResponse(true, '', $data['settings']);
 }
 
 if ($action === 'save_settings' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $settings = $_POST['settings'] ?? null;
 
     // FormData 传过来的是 JSON 字符串，需解码
@@ -234,105 +255,108 @@ if ($action === 'save_settings' && $method === 'POST') {
         jsonResponse(false, '无效的配置数据');
     }
 
-    try {
-        $db = DB::getInstance();
+    json_update(function (&$data) use ($settings) {
         foreach ($settings as $key => $value) {
             // 防止注入非法key
             if (!preg_match('/^[a-zA-Z0-9_]+$/', $key)) {
                 continue;
             }
-            $exists = $db->queryOne("SELECT id FROM settings WHERE setting_key = ?", [$key]);
-            if ($exists) {
-                $db->execute("UPDATE settings SET setting_value = ? WHERE setting_key = ?", [$value, $key]);
-            } else {
-                $db->execute("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)", [$key, $value]);
+            // holidays/workdays 前端可能传 JSON 字符串，这里统一转为数组
+            if (in_array($key, ['holidays', 'workdays']) && is_string($value)) {
+                $decoded = json_decode($value, true);
+                $value = is_array($decoded) ? $decoded : [];
             }
+            $data['settings'][$key] = $value;
         }
-        jsonResponse(true, '配置保存成功');
-    } catch (Exception $e) {
-        jsonResponse(false, '保存失败：' . $e->getMessage());
-    }
+    });
+    jsonResponse(true, '配置保存成功');
 }
 
 if ($action === 'get_mode') {
-    try {
-        $db = DB::getInstance();
-        $row = $db->queryOne("SELECT setting_value FROM settings WHERE setting_key = 'mode'");
-        $mode = $row['setting_value'] ?? 'online';
-        jsonResponse(true, '', ['mode' => $mode]);
-    } catch (Exception $e) {
-        jsonResponse(true, '', ['mode' => 'online']);
-    }
+    $data = json_load();
+    jsonResponse(true, '', ['mode' => $data['settings']['mode'] ?? 'online']);
 }
 
 // ==================== 公告接口 ====================
 
 if ($action === 'get_announcement') {
-    try {
-        $db = DB::getInstance();
-        $now = date('Y-m-d H:i:s');
-        $ann = $db->queryOne(
-            "SELECT * FROM announcements 
-             WHERE is_active = 1 
-             AND (show_from IS NULL OR show_from <= ?) 
-             AND (show_until IS NULL OR show_until >= ?)
-             ORDER BY created_at DESC LIMIT 1",
-            [$now, $now]
-        );
-        jsonResponse(true, '', $ann);
-    } catch (Exception $e) {
-        jsonResponse(false, $e->getMessage());
+    $data = json_load();
+    $now = date('Y-m-d H:i:s');
+    $latest = null;
+    foreach ($data['announcements'] as $a) {
+        if ($a['is_active'] != 1) {
+            continue;
+        }
+        if (!empty($a['show_from']) && $a['show_from'] > $now) {
+            continue;
+        }
+        if (!empty($a['show_until']) && $a['show_until'] < $now) {
+            continue;
+        }
+        // 取最新创建的有效公告
+        if (!$latest || strtotime($a['created_at']) >= strtotime($latest['created_at'])) {
+            $latest = $a;
+        }
     }
+    jsonResponse(true, '', $latest);
 }
 
 if ($action === 'get_announcements') {
     requireAdmin();
-    try {
-        $db = DB::getInstance();
-        $list = $db->query("SELECT * FROM announcements ORDER BY created_at DESC");
-        jsonResponse(true, '', $list);
-    } catch (Exception $e) {
-        jsonResponse(false, $e->getMessage());
-    }
+    $data = json_load();
+    $list = $data['announcements'];
+    usort($list, function ($a, $b) {
+        return strtotime($b['created_at']) <=> strtotime($a['created_at']);
+    });
+    jsonResponse(true, '', $list);
 }
 
 if ($action === 'save_announcement' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $id = $_POST['id'] ?? null;
     $content = $_POST['content'] ?? '';
     $showFrom = $_POST['show_from'] ?: null;
     $showUntil = $_POST['show_until'] ?: null;
     $isActive = intval($_POST['is_active'] ?? 1);
 
-    try {
-        $db = DB::getInstance();
+    json_update(function (&$data) use ($id, $content, $showFrom, $showUntil, $isActive) {
         if ($id) {
-            $db->execute(
-                "UPDATE announcements SET content=?, show_from=?, show_until=?, is_active=? WHERE id=?",
-                [$content, $showFrom, $showUntil, $isActive, $id]
-            );
+            foreach ($data['announcements'] as &$a) {
+                if ($a['id'] == $id) {
+                    $a['content'] = $content;
+                    $a['show_from'] = $showFrom;
+                    $a['show_until'] = $showUntil;
+                    $a['is_active'] = $isActive;
+                    break;
+                }
+            }
+            unset($a);
         } else {
-            $db->execute(
-                "INSERT INTO announcements (content, show_from, show_until, is_active) VALUES (?, ?, ?, ?)",
-                [$content, $showFrom, $showUntil, $isActive]
-            );
+            $data['announcements'][] = [
+                'id'         => $data['next_ann_id']++,
+                'content'    => $content,
+                'show_from'  => $showFrom,
+                'show_until' => $showUntil,
+                'is_active'  => $isActive,
+                'created_at' => date('Y-m-d H:i:s'),
+            ];
         }
-        jsonResponse(true, '公告保存成功');
-    } catch (Exception $e) {
-        jsonResponse(false, '保存失败：' . $e->getMessage());
-    }
+    });
+    jsonResponse(true, '公告保存成功');
 }
 
 if ($action === 'delete_announcement' && $method === 'POST') {
     requireAdmin();
+    requireCsrf();
     $id = intval($_POST['id'] ?? 0);
-    try {
-        $db = DB::getInstance();
-        $db->execute("DELETE FROM announcements WHERE id = ?", [$id]);
-        jsonResponse(true, '公告已删除');
-    } catch (Exception $e) {
-        jsonResponse(false, '删除失败：' . $e->getMessage());
-    }
+
+    json_update(function (&$data) use ($id) {
+        $data['announcements'] = array_values(array_filter($data['announcements'], function ($a) use ($id) {
+            return $a['id'] != $id;
+        }));
+    });
+    jsonResponse(true, '公告已删除');
 }
 
 // ==================== 未匹配的 action ====================

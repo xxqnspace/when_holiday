@@ -1,31 +1,24 @@
 <?php
 /**
  * 数据处理模块
- * 优先从数据库读取配置（在线模式），fallback 到 config.php
+ * 优先从 JSON 数据文件读取配置（在线模式），fallback 到 config.php
  */
 
 if (!isset($config)) {
     $config = include 'config.php';
 }
 
-// 尝试从数据库加载配置
+// 尝试从 JSON 文件加载配置
 $dbLoaded = false;
 try {
-    require_once 'db.php';
-    $db = DB::getInstance();
-    $rows = $db->query("SELECT setting_key, setting_value FROM settings");
-    foreach ($rows as $row) {
-        $key = $row['setting_key'];
-        $val = $row['setting_value'];
-        // JSON 数组字段需要解码
-        if (in_array($key, ['holidays', 'workdays'])) {
-            $val = json_decode($val, true) ?: [];
-        }
+    require_once 'storage.php';
+    $data = json_load();
+    foreach ($data['settings'] as $key => $val) {
         $config[$key] = $val;
     }
     $dbLoaded = true;
 } catch (Exception $e) {
-    // 数据库不可用时静默 fallback 到 config.php
+    // 数据文件不可用时静默 fallback 到 config.php
 }
 
 // 将配置转化为时间戳和数组，供前端 JS 使用

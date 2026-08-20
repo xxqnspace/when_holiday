@@ -139,6 +139,16 @@ include 'countdown.php';
             margin-left: 8px;
             transform: translateY(-5px);
         }
+        .holiday-text {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            animation: holidayPulse 2s ease-in-out infinite;
+        }
+        @keyframes holidayPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
 
         /* 倒计时 */
         .countdown-grid {
@@ -192,13 +202,33 @@ include 'countdown.php';
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         th, td { padding: 5px; text-align: center; border-radius: 4px; }
         th.weekend { color: #ffab91; }
-        .week-col { color: #aaa; font-size: 0.75rem; }
+        .week-col { color: #aaa; font-size: 0.75rem; white-space: nowrap; }
         .day-cell { border: 1px solid transparent; }
         .past { background-color: #e8f5e9; color: #2e7d32; }
         .rest { background-color: #e3f2fd; color: #1565c0; }
         .work { background-color: #ffffff; border: 1px solid #eee; }
         .today { border: 2px solid #ff9800 !important; font-weight: bold; }
         .out-of-range { opacity: 0.3; }
+
+        /* 日历展开/收起按钮 */
+        .calendar-toggle-wrap {
+            text-align: center;
+            margin-top: 16px;
+        }
+        .calendar-toggle-btn {
+            padding: 10px 28px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: var(--border-radius);
+            background: rgba(255, 255, 255, var(--glass-opacity));
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .extra-month { display: none; }
+        .calendar-container.expanded .extra-month { display: block; }
 
         /* 管理入口 - 头部卡片右上角 */
         .admin-link {
@@ -302,17 +332,17 @@ include 'countdown.php';
         </div>
         <div class="percentage-display">
             <span id="percent-text">0.000000</span>
-            <span class="percentage-symbol">%</span>
+            <span class="percentage-symbol" id="percent-symbol">%</span>
         </div>
     </div>
 
-    <div class="countdown-grid">
+    <div class="countdown-grid" id="countdown-grid">
         <div class="countdown-card">
-            <h3>距离学期结束</h3>
+            <h3 id="total-label">距离学期结束</h3>
             <div class="timer-display" id="total-timer">-- days --:--:--</div>
         </div>
-        <div class="countdown-card">
-            <h3>剩余工作时间</h3>
+        <div class="countdown-card" id="work-card">
+            <h3 id="work-label">剩余工作时间</h3>
             <div class="timer-display" id="work-timer">-- days --:--:--</div>
         </div>
     </div>
@@ -370,6 +400,7 @@ include 'countdown.php';
     function update() {
         const now = getCurrentTime();
         const nowTs = now.getTime();
+        const isHoliday = nowTs >= config.end;
 
         // 更新时间显示
         const timeStr = now.getFullYear() + '年' +
@@ -388,15 +419,42 @@ include 'countdown.php';
         else if (passedDuration > 0) percent = (passedDuration / totalDuration) * 100;
 
         document.getElementById('progress-bar').style.width = percent + '%';
-        document.getElementById('percent-text').innerText = percent.toFixed(6);
 
-        // 总倒计时
-        const remainingTotal = config.end - nowTs;
-        document.getElementById('total-timer').innerHTML = renderTimer(remainingTotal);
+        const percentText = document.getElementById('percent-text');
+        const percentSymbol = document.getElementById('percent-symbol');
+        if (isHoliday) {
+            percentText.innerText = '已放假！🎉';
+            percentText.classList.add('holiday-text');
+            percentSymbol.style.display = 'none';
+        } else {
+            percentText.innerText = percent.toFixed(6);
+            percentText.classList.remove('holiday-text');
+            percentSymbol.style.display = '';
+        }
 
-        // 工作日倒计时
-        let remainingWorkSeconds = 0;
-        if (nowTs < config.end) {
+        // 倒计时卡片标题
+        const totalLabel = document.getElementById('total-label');
+        const workCard = document.getElementById('work-card');
+        const countdownGrid = document.getElementById('countdown-grid');
+        if (isHoliday) {
+            totalLabel.textContent = '已放假时间';
+            workCard.style.display = 'none';
+            countdownGrid.style.gridTemplateColumns = 'minmax(280px, 400px)';
+            countdownGrid.style.justifyContent = 'center';
+        } else {
+            totalLabel.textContent = '距离学期结束';
+            workCard.style.display = '';
+            countdownGrid.style.gridTemplateColumns = '';
+            countdownGrid.style.justifyContent = '';
+        }
+
+        // 总倒计时 / 正计时
+        const totalRemaining = isHoliday ? (nowTs - config.end) : (config.end - nowTs);
+        document.getElementById('total-timer').innerHTML = renderTimer(totalRemaining);
+
+        // 工作日倒计时（放假后不计算）
+        if (!isHoliday) {
+            let workSeconds = 0;
             let cursor = new Date(nowTs);
             let endDate = new Date(config.end);
             let loopLimit = 1000;
@@ -405,14 +463,14 @@ include 'countdown.php';
                 dayEnd.setHours(24, 0, 0, 0);
                 if (dayEnd > endDate) dayEnd = new Date(endDate);
                 if (isWorkDay(cursor)) {
-                    remainingWorkSeconds += (dayEnd - cursor);
+                    workSeconds += (dayEnd - cursor);
                 }
                 cursor.setDate(cursor.getDate() + 1);
                 cursor.setHours(0, 0, 0, 0);
                 loopLimit--;
             }
+            document.getElementById('work-timer').innerHTML = renderTimer(workSeconds);
         }
-        document.getElementById('work-timer').innerHTML = renderTimer(remainingWorkSeconds);
     }
 
     // ==================== 应用配置到页面 ====================
@@ -474,8 +532,44 @@ include 'countdown.php';
         applyConfig(cfg);
     }
 
+    // ==================== 日历展开/收起 ====================
+    // 大屏（>768px）默认展开全部月份；小屏（手机）默认只显示当前月份
+    let calendarExpanded = window.innerWidth > 768;
+    let calendarViewportDesktop = calendarExpanded; // 记录当前断点状态
+
+    function applyCalendarState() {
+        const container = document.getElementById('calendar-container');
+        const btn = document.getElementById('calendar-toggle-btn');
+        if (!container || !btn) return;
+        if (calendarExpanded) {
+            container.classList.add('expanded');
+            btn.textContent = '仅展示当前月份';
+        } else {
+            container.classList.remove('expanded');
+            btn.textContent = '展开本学期全部月份';
+        }
+    }
+
+    function toggleCalendarMonths() {
+        calendarExpanded = !calendarExpanded;
+        applyCalendarState();
+    }
+
+    // 仅在窗口尺寸跨过断点（大屏↔小屏）时自动切换，不干扰手动操作
+    window.addEventListener('resize', function() {
+        const isDesktop = window.innerWidth > 768;
+        if (isDesktop !== calendarViewportDesktop) {
+            calendarViewportDesktop = isDesktop;
+            calendarExpanded = isDesktop;
+            applyCalendarState();
+        }
+    });
+
     // ==================== 初始化流程 ====================
     async function init() {
+        // 0. 应用日历初始展开状态（大屏全部月份 / 小屏当前月份）
+        applyCalendarState();
+
         // 1. 从服务端加载配置
         try {
             const resp = await fetch('api.php?action=get_settings');
