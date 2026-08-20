@@ -400,7 +400,8 @@ include 'countdown.php';
     function update() {
         const now = getCurrentTime();
         const nowTs = now.getTime();
-        const isHoliday = nowTs >= config.end;
+        const isBeforeStart = nowTs < config.start;  // 开学前（假期中）
+        const isHoliday = nowTs >= config.end;       // 学期结束后
 
         // 更新时间显示
         const timeStr = now.getFullYear() + '年' +
@@ -422,7 +423,11 @@ include 'countdown.php';
 
         const percentText = document.getElementById('percent-text');
         const percentSymbol = document.getElementById('percent-symbol');
-        if (isHoliday) {
+        if (isBeforeStart) {
+            percentText.innerText = '当前在假期中，尽情享受吧~🎉';
+            percentText.classList.add('holiday-text');
+            percentSymbol.style.display = 'none';
+        } else if (isHoliday) {
             percentText.innerText = '已放假！🎉';
             percentText.classList.add('holiday-text');
             percentSymbol.style.display = 'none';
@@ -436,7 +441,12 @@ include 'countdown.php';
         const totalLabel = document.getElementById('total-label');
         const workCard = document.getElementById('work-card');
         const countdownGrid = document.getElementById('countdown-grid');
-        if (isHoliday) {
+        if (isBeforeStart) {
+            totalLabel.textContent = '距离开学还有';
+            workCard.style.display = 'none';
+            countdownGrid.style.gridTemplateColumns = 'minmax(280px, 400px)';
+            countdownGrid.style.justifyContent = 'center';
+        } else if (isHoliday) {
             totalLabel.textContent = '已放假时间';
             workCard.style.display = 'none';
             countdownGrid.style.gridTemplateColumns = 'minmax(280px, 400px)';
@@ -449,11 +459,18 @@ include 'countdown.php';
         }
 
         // 总倒计时 / 正计时
-        const totalRemaining = isHoliday ? (nowTs - config.end) : (config.end - nowTs);
+        let totalRemaining;
+        if (isBeforeStart) {
+            totalRemaining = config.start - nowTs;  // 距离开学
+        } else if (isHoliday) {
+            totalRemaining = nowTs - config.end;    // 已放假时长
+        } else {
+            totalRemaining = config.end - nowTs;    // 距离学期结束
+        }
         document.getElementById('total-timer').innerHTML = renderTimer(totalRemaining);
 
-        // 工作日倒计时（放假后不计算）
-        if (!isHoliday) {
+        // 工作日倒计时（仅学期中计算）
+        if (!isHoliday && !isBeforeStart) {
             let workSeconds = 0;
             let cursor = new Date(nowTs);
             let endDate = new Date(config.end);
