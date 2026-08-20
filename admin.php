@@ -101,6 +101,11 @@ if (!$loggedIn):
         .error { background: #ffebee; color: #c62828; padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem; text-align: center; }
         .back-link { text-align: center; margin-top: 16px; }
         .back-link a { color: #5c6bc0; text-decoration: none; font-size: 0.9rem; }
+
+        /* 移动端：输入框字号≥16px，避免 iOS 聚焦自动放大页面 */
+        @media (max-width: 768px) {
+            .form-group input { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -320,6 +325,8 @@ endif; // 登录页结束
             .sidebar.expanded + .main { margin-left: 220px; }
             /* 桌面切换按钮在移动端显示 */
             .sidebar-toggle { display: flex; }
+            /* 输入框字号≥16px，避免 iOS 聚焦自动放大页面 */
+            .form-group input, .form-group select, .form-group textarea { font-size: 16px; }
         }
         @media (min-width: 769px) {
             .sidebar-toggle { display: none; }
