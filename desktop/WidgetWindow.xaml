@@ -1,0 +1,71 @@
+<Window x:Class="DesktopCountdown.WidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="300"
+        Height="150"
+        MinWidth="220"
+        MinHeight="110"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        LocationChanged="Window_LocationChanged"
+        SizeChanged="Window_SizeChanged"
+        Closing="Window_Closing">
+    <Grid>
+        <Border x:Name="RootBorder"
+                CornerRadius="18"
+                BorderThickness="1"
+                SnapsToDevicePixels="True"
+                UseLayoutRounding="True">
+            <Grid>
+                <!-- 经典 Aero 玻璃质感叠加层：位于内容之下，不参与命中测试（不挡拖动/右键） -->
+                <Border x:Name="AeroHighlightBorder" CornerRadius="17" IsHitTestVisible="False" />
+                <Border x:Name="AeroSheenBorder" CornerRadius="17" IsHitTestVisible="False" />
+                <Grid Margin="18">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="TitleText"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <ItemsControl x:Name="CountdownItems"
+                                  Grid.Row="1"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="6,0" HorizontalAlignment="Center" MinWidth="28">
+                                    <TextBlock Text="{Binding Value}"
+                                               Tag="value"
+                                               FontWeight="Bold"
+                                               TextAlignment="Center"
+                                               FontFamily="Consolas"
+                                               MinWidth="20" />
+                                    <TextBlock Text="{Binding Unit}"
+                                               Tag="unit"
+                                               TextAlignment="Center"
+                                               Opacity="0.82"
+                                               MinWidth="20" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="TargetText"
+                               Grid.Row="2"
+                               Opacity="0.78"
+                               TextAlignment="Center" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,17 @@
+{
+  "name": "holiday-countdown",
+  "version": "3.0.0",
+  "private": true,
+  "description": "什么时候放假啊 - 学期倒计时与进度追踪（Cloudflare Pages + D1）",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy",
+    "db:migrate:local": "wrangler d1 migrations apply holiday --local",
+    "db:migrate:remote": "wrangler d1 migrations apply holiday --remote",
+    "db:console": "wrangler d1 execute holiday --remote --command"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

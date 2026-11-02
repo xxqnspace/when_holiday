@@ -2,3 +2,15 @@
 data/db.json.php
 data/*.tmp
 data/.lock
+
+# Cloudflare 版：依赖与 wrangler 本地状态
+cloudflare/node_modules/
+cloudflare/.wrangler/
+cloudflare/.dev.vars
+cloudflare/dist/
+
+# 桌面版：.NET 构建产物
+desktop/bin/
+desktop/obj/
+desktop/.vs/
+*.user

@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" href="icons/icon-96.png" type="image/png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#5c6bc0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>什么时候放假啊o(╥﹏╥)o</title>
+    <!-- Open Graph 协议：微信等社交平台分享图文卡片
+         部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
+    <meta property="og:title" content="什么时候放假啊o(╥﹏╥)o">
+    <meta property="og:description" content="实时进度与放假倒计时，节假日日历一目了然。">
+    <meta property="og:image" content="/icons/icon-512.png">
+    <meta property="og:url" content="/">
+    <meta property="og:type" content="website">
+    <style>
+        :root {
+            --primary-color: #5c6bc0;
+            --font-color: #333333;
+            --card-bg: #ffffff;
+            --page-bg: #f7f9fc;
+            --progress-start: #7ed957;
+            --progress-end: #2e8b57;
+            --percent-color: #5c6bc0;
+            --bg-image: none;
+            --bg-image-opacity: 0.3;
+            --glass-opacity: 0.7;
+            --shadow: 0 4px 20px rgba(0,0,0,0.05);
+            --border-radius: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--page-bg);
+            color: var(--font-color);
+            min-height: 100vh;
+            padding: max(20px, env(safe-area-inset-top)) 20px 20px;
+            text-align: center;
+            transition: background-color 0.3s;
+            position: relative;
+        }
+
+        /* 图片背景模式 */
+        body.bg-image {
+            background-color: var(--page-bg);
+        }
+        body.bg-image::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: var(--bg-image);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: var(--bg-image-opacity);
+            z-index: 0;
+            pointer-events: none;
+        }
+        body.bg-image > .container {
+            position: relative;
+            z-index: 1;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; position: relative; }
+
+        /* 头部 */
+        header {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            transition: background 0.3s;
+        }
+        .date-info span { display: block; color: var(--font-color); font-size: 0.9rem; margin: 5px 0; }
+        .current-time { font-size: 1.2rem; font-weight: bold; color: var(--primary-color); font-variant-numeric: tabular-nums; }
+
+        /* 毛玻璃效果 - 图片背景时启用 */
+        body.bg-image header,
+        body.bg-image .progress-section,
+        body.bg-image .countdown-card,
+        body.bg-image .calendar-section,
+        body.bg-image .month-card {
+            background: rgba(255, 255, 255, var(--glass-opacity));
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.bg-image .month-card { border-color: transparent; }
+
+        /* 进度条 */
+        .progress-section {
+            background: var(--card-bg);
+            padding: 20px 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            transition: background 0.3s;
+        }
+        .progress-title { font-size: 1.1rem; color: var(--font-color); margin-bottom: 5px; }
+        .progress-container {
+            background-color: #e8ecf1;
+            border-radius: 20px;
+            height: 35px;
+            width: 100%;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, var(--progress-start), var(--progress-end));
+            height: 100%;
+            width: 0%;
+            transition: width 0.1s linear;
+            border-radius: 20px;
+        }
+        .percentage-display {
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+            margin-top: 10px;
+            font-size: 2.5rem;
+            font-weight: 650;
+            line-height: 1;
+            color: var(--percent-color);
+            text-shadow: 0 4px 8px rgba(46, 125, 50, 0.2);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -2px;
+        }
+        .percentage-symbol {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--percent-color);
+            margin-left: 8px;
+            transform: translateY(-5px);
+        }
+        .holiday-text {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-align: center;
+            line-height: 1.5;
+            animation: holidayPulse 2s ease-in-out infinite;
+        }
+        @keyframes holidayPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* 倒计时 */
+        .countdown-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) { .countdown-grid { grid-template-columns: 1fr; } }
+
+        /* 手机端：管理按钮固定在头部卡片右上角 */
+        @media (max-width: 768px) {
+            header { position: relative; }
+            .admin-link {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                margin-left: 0;
+            }
+        }
+        .countdown-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: background 0.3s;
+        }
+        .countdown-card h3 { margin-bottom: 10px; color: var(--font-color); font-weight: 500; font-size: 1rem; }
+        .timer-display {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--font-color);
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            font-variant-numeric: tabular-nums;
+        }
+        .timer-unit span { font-size: 0.8rem; display: block; font-weight: normal; color: var(--font-color); }
+
+        /* 日历 */
+        .calendar-section {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: background 0.3s;
+        }
+        .calendar-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .month-card { border: 1px solid #eee; border-radius: 8px; padding: 10px; background: #fff; }
+        .month-title { font-weight: bold; margin-bottom: 10px; color: var(--primary-color); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 5px; text-align: center; border-radius: 4px; }
+        th.weekend { color: #ffab91; }
+        .week-col { color: #aaa; font-size: 0.75rem; white-space: nowrap; }
+        .day-cell { border: 1px solid transparent; }
+        .past { background-color: #e8f5e9; color: #2e7d32; }
+        .rest { background-color: #e3f2fd; color: #1565c0; }
+        .work { background-color: #ffffff; border: 1px solid #eee; }
+        .today { border: 2px solid #ff9800 !important; font-weight: bold; }
+        .out-of-range { opacity: 0.3; }
+
+        /* 日历展开/收起按钮 */
+        .calendar-toggle-wrap {
+            text-align: center;
+            margin-top: 16px;
+        }
+        .calendar-toggle-btn {
+            padding: 10px 28px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: var(--border-radius);
+            background: rgba(255, 255, 255, var(--glass-opacity));
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .extra-month { display: none; }
+        .calendar-container.expanded .extra-month { display: block; }
+
+        /* 管理入口 - 头部卡片右上角 */
+        .admin-link {
+            display: inline-block;
+            padding: 4px 12px;
+            border: 1px solid var(--font-color);
+            border-radius: 6px;
+            color: var(--font-color);
+            text-decoration: none;
+            font-size: 0.8rem;
+            margin-left: 12px;
+            transition: opacity 0.2s;
+            vertical-align: middle;
+            line-height: 1.6;
+        }
+        .admin-link:hover { opacity: 0.55; }
+
+        /* 公告消息条 */
+        .announcement-bar {
+            max-width: 1000px;
+            margin: 0 auto 16px;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            position: relative;
+            animation: slideDown 0.3s ease;
+        }
+        .announcement-bar.hidden { display: none; }
+        .ann-progress {
+            height: 3px;
+            background: var(--primary-color);
+            width: 100%;
+        }
+        .ann-body {
+            display: flex;
+            align-items: flex-start;
+            padding: 14px 20px;
+            gap: 12px;
+        }
+        .ann-body .ann-content {
+            flex: 1;
+            color: var(--font-color);
+            font-size: 0.92rem;
+            line-height: 1.7;
+            text-align: left;
+        }
+        .ann-body .ann-content p { margin: 4px 0; }
+        .ann-body .ann-content a { color: var(--primary-color); }
+        .ann-body .ann-content code {
+            background: #f1f5f9;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .ann-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+            padding: 0 2px;
+            flex-shrink: 0;
+        }
+        .ann-close-btn:hover { color: #333; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 公告消息条 -->
+    <div class="announcement-bar hidden" id="announcement-bar">
+        <div class="ann-progress" id="ann-progress"></div>
+        <div class="ann-body">
+            <div class="ann-content" id="announcement-content"></div>
+            <button class="ann-close-btn" onclick="closeAnnouncement()">×</button>
+        </div>
+    </div>
+
+    <header>
+        <div class="date-info" style="text-align:left;">
+            <span id="start-date-text">开学：—</span>
+            <span id="end-date-text">结束：—</span>
+        </div>
+        <div>
+            <span class="current-time" id="server-time">Loading...</span>
+            <a href="admin.html" class="admin-link">管理</a>
+        </div>
+    </header>
+
+    <div class="progress-section">
+        <div class="progress-title">本学期进度</div>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+        <div class="percentage-display">
+            <span id="percent-text">0.000000</span>
+            <span class="percentage-symbol" id="percent-symbol">%</span>
+        </div>
+    </div>
+
+    <div class="countdown-grid" id="countdown-grid">
+        <div class="countdown-card">
+            <h3 id="total-label">距离学期结束</h3>
+            <div class="timer-display" id="total-timer">-- days --:--:--</div>
+        </div>
+        <div class="countdown-card" id="work-card">
+            <h3 id="work-label">剩余工作时间</h3>
+            <div class="timer-display" id="work-timer">-- days --:--:--</div>
+        </div>
+    </div>
+
+    <div class="calendar-section">
+        <!-- 日历由 JS 渲染，对应原 date.php 的服务端输出 -->
+        <div class="calendar-container" id="calendar-container"></div>
+        <div class="calendar-toggle-wrap" id="calendar-toggle-wrap" style="display: none;">
+            <button class="calendar-toggle-btn" id="calendar-toggle-btn" onclick="toggleCalendarMonths()">展开本学期全部月份</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==================== 核心配置 ====================
+    // 默认值与 functions/_lib/config.js 中的 DEFAULT_SETTINGS 保持一致，
+    // 接口不可用时作为兜底（对应原 PHP 版 config.php 的角色）。
+    const defaultConfig = {
+        serverNow: Date.now(),
+        start: new Date('2026-03-05T06:30:00').getTime(),
+        end: new Date('2026-07-03T17:00:00').getTime(),
+        holidays: ['2026-04-06', '2026-05-01', '2026-05-04', '2026-05-05', '2026-06-19'],
+        workdays: ['2026-05-09'],
+        dbLoaded: false,
+        mode: 'online',
+        bg_type: 'solid',
+        bg_color: '#f7f9fc',
+        bg_image_url: '',
+        bg_image_opacity: '0.3',
+        glass_opacity: '0.7',
+        primary_color: '#5c6bc0',
+        font_color: '#333333',
+        card_bg: '#ffffff',
+        page_bg: '#f7f9fc',
+        progress_bar_start: '#7ed957',
+        progress_bar_end: '#2e8b57',
+        progress_percent_color: '#5c6bc0',
+        title: '什么时候放假啊o(╥﹏╥)o',
+        announcement_auto_close: '5',
+    };
+    let config = Object.assign({}, defaultConfig);
+
+    // 直接使用客户端时间（服务端时间仅作为配置来源，不用于计时同步）
+    function getCurrentTime() {
+        return new Date();
+    }
+
+    function formatNumber(num) {
+        return String(Math.floor(num)).padStart(2, '0');
+    }
+
+    function formatDateStr(dateObj) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function renderTimer(ms) {
+        if (ms < 0) ms = 0;
+        const seconds = Math.floor(ms / 1000);
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `
+            <div>${d}<span class="timer-unit"><span>天</span></span></div>:
+            <div>${formatNumber(h)}<span class="timer-unit"><span>时</span></span></div>:
+            <div>${formatNumber(m)}<span class="timer-unit"><span>分</span></span></div>:
+            <div>${formatNumber(s)}<span class="timer-unit"><span>秒</span></span></div>
+        `;
+    }
+
+    function isWorkDay(dateObj) {
+        const dateStr = formatDateStr(dateObj);
+        const day = dateObj.getDay();
+        if (config.workdays.includes(dateStr)) return true;
+        if (config.holidays.includes(dateStr)) return false;
+        if (day === 0 || day === 6) return false;
+        return true;
+    }
+
+    function update() {
+        const now = getCurrentTime();
+        const nowTs = now.getTime();
+        const isBeforeStart = nowTs < config.start;  // 开学前（假期中）
+        const isHoliday = nowTs >= config.end;       // 学期结束后
+
+        // 更新时间显示
+        const timeStr = now.getFullYear() + '年' +
+                       String(now.getMonth()+1).padStart(2,'0') + '月' +
+                       String(now.getDate()).padStart(2,'0') + '日 ' +
+                       String(now.getHours()).padStart(2,'0') + ':' +
+                       String(now.getMinutes()).padStart(2,'0') + ':' +
+                       String(now.getSeconds()).padStart(2,'0');
+        document.getElementById('server-time').innerText = timeStr;
+
+        // 进度百分比
+        const totalDuration = config.end - config.start;
+        const passedDuration = nowTs - config.start;
+        let percent = 0;
+        if (passedDuration >= totalDuration) percent = 100;
+        else if (passedDuration > 0) percent = (passedDuration / totalDuration) * 100;
+
+        document.getElementById('progress-bar').style.width = percent + '%';
+
+        const percentText = document.getElementById('percent-text');
+        const percentSymbol = document.getElementById('percent-symbol');
+        const progressContainer = document.getElementById('progress-container');
+        if (isBeforeStart) {
+            percentText.innerHTML = '假期中~🎉';
+            percentText.classList.add('holiday-text');
+            percentSymbol.style.display = 'none';
+            progressContainer.style.display = 'none';
+        } else if (isHoliday) {
+            percentText.innerText = '已放假！🎉';
+            percentText.classList.add('holiday-text');
+            percentSymbol.style.display = 'none';
+            progressContainer.style.display = '';
+        } else {
+            percentText.innerText = percent.toFixed(6);
+            percentText.classList.remove('holiday-text');
+            percentSymbol.style.display = '';
+            progressContainer.style.display = '';
+        }
+
+        // 倒计时卡片标题
+        const totalLabel = document.getElementById('total-label');
+        const workCard = document.getElementById('work-card');
+        const countdownGrid = document.getElementById('countdown-grid');
+        if (isBeforeStart) {
+            totalLabel.textContent = '距离开学还有';
+            workCard.style.display = 'none';
+            countdownGrid.style.gridTemplateColumns = 'minmax(280px, 400px)';
+            countdownGrid.style.justifyContent = 'center';
+        } else if (isHoliday) {
+            totalLabel.textContent = '已放假时间';
+            workCard.style.display = 'none';
+            countdownGrid.style.gridTemplateColumns = 'minmax(280px, 400px)';
+            countdownGrid.style.justifyContent = 'center';
+        } else {
+            totalLabel.textContent = '距离学期结束';
+            workCard.style.display = '';
+            countdownGrid.style.gridTemplateColumns = '';
+            countdownGrid.style.justifyContent = '';
+        }
+
+        // 总倒计时 / 正计时
+        let totalRemaining;
+        if (isBeforeStart) {
+            totalRemaining = config.start - nowTs;  // 距离开学
+        } else if (isHoliday) {
+            totalRemaining = nowTs - config.end;    // 已放假时长
+        } else {
+            totalRemaining = config.end - nowTs;    // 距离学期结束
+        }
+        document.getElementById('total-timer').innerHTML = renderTimer(totalRemaining);
+
+        // 工作日倒计时（仅学期中计算）
+        if (!isHoliday && !isBeforeStart) {
+            let workSeconds = 0;
+            let cursor = new Date(nowTs);
+            let endDate = new Date(config.end);
+            let loopLimit = 1000;
+            while (cursor < endDate && loopLimit > 0) {
+                let dayEnd = new Date(cursor);
+                dayEnd.setHours(24, 0, 0, 0);
+                if (dayEnd > endDate) dayEnd = new Date(endDate);
+                if (isWorkDay(cursor)) {
+                    workSeconds += (dayEnd - cursor);
+                }
+                cursor.setDate(cursor.getDate() + 1);
+                cursor.setHours(0, 0, 0, 0);
+                loopLimit--;
+            }
+            document.getElementById('work-timer').innerHTML = renderTimer(workSeconds);
+        }
+    }
+
+    // ==================== 应用配置到页面 ====================
+    function applyConfig(cfg) {
+        const root = document.documentElement;
+        root.style.setProperty('--primary-color', cfg.primary_color);
+        root.style.setProperty('--font-color', cfg.font_color);
+        root.style.setProperty('--card-bg', cfg.card_bg);
+        root.style.setProperty('--page-bg', cfg.page_bg);
+        root.style.setProperty('--progress-start', cfg.progress_bar_start);
+        root.style.setProperty('--progress-end', cfg.progress_bar_end);
+        root.style.setProperty('--percent-color', cfg.progress_percent_color);
+        root.style.setProperty('--bg-image-opacity', cfg.bg_image_opacity);
+        root.style.setProperty('--glass-opacity', cfg.glass_opacity);
+
+        // 背景模式
+        if (cfg.bg_type === 'image' && cfg.bg_image_url) {
+            document.body.classList.add('bg-image');
+            root.style.setProperty('--bg-image', `url(${cfg.bg_image_url})`);
+        } else {
+            document.body.classList.remove('bg-image');
+            root.style.setProperty('--bg-image', 'none');
+        }
+
+        // 纯色背景
+        if (cfg.bg_type === 'solid' && cfg.bg_color) {
+            root.style.setProperty('--page-bg', cfg.bg_color);
+        }
+
+        // 更新标题
+        if (cfg.title) {
+            document.title = cfg.title;
+        }
+
+        // 更新头部学期起止时间
+        updateDateInfo();
+
+        // 合并到运行时配置
+        Object.assign(config, cfg);
+    }
+
+    function applyJSONConfig(jsonSettings) {
+        const cfg = {
+            primary_color: jsonSettings.primary_color || defaultConfig.primary_color,
+            font_color: jsonSettings.font_color || defaultConfig.font_color,
+            card_bg: jsonSettings.card_bg || defaultConfig.card_bg,
+            page_bg: jsonSettings.page_bg || defaultConfig.page_bg,
+            progress_bar_start: jsonSettings.progress_bar_start || defaultConfig.progress_bar_start,
+            progress_bar_end: jsonSettings.progress_bar_end || defaultConfig.progress_bar_end,
+            progress_percent_color: jsonSettings.progress_percent_color || defaultConfig.progress_percent_color,
+            bg_type: jsonSettings.bg_type || defaultConfig.bg_type,
+            bg_color: jsonSettings.bg_color || defaultConfig.bg_color,
+            bg_image_url: jsonSettings.bg_image_url || defaultConfig.bg_image_url,
+            bg_image_opacity: jsonSettings.bg_image_opacity || defaultConfig.bg_image_opacity,
+            glass_opacity: jsonSettings.glass_opacity || defaultConfig.glass_opacity,
+            title: jsonSettings.title || defaultConfig.title,
+            start: new Date((jsonSettings.start_date || '').replace(' ', 'T')).getTime() || defaultConfig.start,
+            end: new Date((jsonSettings.end_date || '').replace(' ', 'T')).getTime() || defaultConfig.end,
+            holidays: jsonSettings.holidays ? (typeof jsonSettings.holidays === 'string' ? JSON.parse(jsonSettings.holidays) : jsonSettings.holidays) : defaultConfig.holidays,
+            workdays: jsonSettings.workdays ? (typeof jsonSettings.workdays === 'string' ? JSON.parse(jsonSettings.workdays) : jsonSettings.workdays) : defaultConfig.workdays,
+        };
+        applyConfig(cfg);
+    }
+
+    /** 把学期起止时间写进头部（原 PHP 直接输出 $config 的值） */
+    function updateDateInfo() {
+        const startEl = document.getElementById('start-date-text');
+        const endEl = document.getElementById('end-date-text');
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (ts) => {
+            const d = new Date(ts);
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+                   `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        };
+        if (startEl) startEl.textContent = '开学：' + fmt(config.start);
+        if (endEl) endEl.textContent = '结束：' + fmt(config.end);
+    }
+
+    // ==================== 日历渲染 ====================
+    // 以下逻辑是原 date.php 服务端渲染的逐行等价翻译。
+    // 两处容易踩空的细节，已按 PHP 实际输出对齐：
+    //   1. PHP 的 modify('this week monday') 是 ISO 语义 —— 周日属于本周，
+    //      因此「本周一」要往前推 6 天，而不是推到下周一。
+    //   2. 日期格的时分秒继承自学期开始时间（PHP 里 month_start 由 start_date 克隆而来），
+    //      所以比较基准是「当天 06:30」而不是「当天 00:00」。
+    const DAY_MS = 86400000;
+
+    function isoDayOf(dateObj) {
+        const dow = dateObj.getDay();          // 0=周日 .. 6=周六
+        return dow === 0 ? 7 : dow;            // 1=周一 .. 7=周日
+    }
+
+    /** 取某个时间戳所在「日期」的 00:00（本地时区） */
+    function startOfDayTs(ts) {
+        const d = new Date(ts);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    }
+
+    /** 取所在周的周一 00:00，等价于 PHP 的 modify('this week monday') */
+    function mondayTs(ts) {
+        const d = new Date(startOfDayTs(ts));
+        const iso = isoDayOf(d);
+        d.setDate(d.getDate() - (iso - 1));
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    }
+
+    /** 对应 date.php 的 getWeekNumber() */
+    function getWeekNumber(ts, semesterStartTs) {
+        const diffDays = (mondayTs(ts) - mondayTs(semesterStartTs)) / DAY_MS;
+        return Math.floor(diffDays / 7) + 1;
+    }
+
+    /** 对应 date.php 的 getHolidayWeekNumber() */
+    function getHolidayWeekNumber(ts, semesterEndTs) {
+        const diffDays = (mondayTs(ts) - mondayTs(semesterEndTs)) / DAY_MS;
+        return Math.floor(diffDays / 7) + 1;
+    }
+
+    /** 周次列的文案：学期前为「-」，学期后为「放假N周」 */
+    function weekLabel(ts, startTs, endTs) {
+        if (ts < startTs) return '-';
+        if (ts > endTs) return '放假' + getHolidayWeekNumber(ts, endTs) + '周';
+        return String(getWeekNumber(ts, startTs));
+    }
+
+    /** 学期起止日期所在月份之间的所有月份 */
+    function monthRange(startTs, endTs) {
+        const s = new Date(startTs);
+        const e = new Date(endTs);
+        const months = [];
+        let y = s.getFullYear();
+        let m = s.getMonth();
+        const endY = e.getFullYear();
+        const endM = e.getMonth();
+        while (y < endY || (y === endY && m <= endM)) {
+            months.push({ year: y, month: m });
+            m += 1;
+            if (m > 11) { m = 0; y += 1; }
+        }
+        return months;
+    }
+
+    function renderCalendar() {
+        const container = document.getElementById('calendar-container');
+        const toggleWrap = document.getElementById('calendar-toggle-wrap');
+        if (!container) return;
+
+        const startTs = config.start;
+        const endTs = config.end;
+        const now = getCurrentTime();
+        const nowTs = now.getTime();
+        const todayStr = formatDateStr(now);
+
+        // 日期格的时间偏移（时分秒毫秒），继承自学期开始时间
+        const s = new Date(startTs);
+        const timeOffset = ((s.getHours() * 60 + s.getMinutes()) * 60 + s.getSeconds()) * 1000
+                         + s.getMilliseconds();
+
+        const holidays = Array.isArray(config.holidays) ? config.holidays : [];
+        const workdays = Array.isArray(config.workdays) ? config.workdays : [];
+        const months = monthRange(startTs, endTs);
+
+        const pad2 = (n) => String(n).padStart(2, '0');
+        let html = '';
+
+        for (const { year, month } of months) {
+            const isCurrentMonth =
+                year === now.getFullYear() && month === now.getMonth();
+            const monthStr = `${year}-${pad2(month + 1)}`;
+            const firstDow = isoDayOf(new Date(year, month, 1));
+            const lastDayNum = new Date(year, month + 1, 0).getDate();
+
+            html += `<div class="month-card ${isCurrentMonth ? 'current-month' : 'extra-month'}" data-month="${monthStr}">`;
+            html += `<div class="month-title">${year}年${pad2(month + 1)}月</div>`;
+            html += '<table><thead><tr>'
+                  + '<th>周次</th>'
+                  + '<th>一</th><th>二</th><th>三</th><th>四</th><th>五</th>'
+                  + '<th class="weekend">六</th><th class="weekend">日</th>'
+                  + '</tr></thead><tbody>';
+
+            // 构造某一天的完整时间戳（当天 00:00 + 学期开始时分的偏移）
+            const tsOfDay = (dayNum) =>
+                new Date(year, month, dayNum, 0, 0, 0, 0).getTime() + timeOffset;
+
+            html += '<tr>';
+            html += `<td class='week-col'>${weekLabel(tsOfDay(1), startTs, endTs)}</td>`;
+            for (let i = 1; i < firstDow; i++) html += '<td></td>';
+
+            for (let day = 1; day <= lastDayNum; day++) {
+                const ts = tsOfDay(day);
+                const dow = isoDayOf(new Date(year, month, day));
+
+                // 遇到周一且不是当月第一天 → 换行并输出新的周次
+                if (dow === 1 && day !== 1) {
+                    html += '</tr><tr>';
+                    html += `<td class='week-col'>${weekLabel(ts, startTs, endTs)}</td>`;
+                }
+
+                const dateStr = `${monthStr}-${pad2(day)}`;
+                let cls = 'day-cell';
+
+                if (ts < nowTs && dateStr !== todayStr) {
+                    cls += ' past';
+                } else {
+                    const isWeekend = dow >= 6;
+                    const isHoliday = holidays.includes(dateStr);
+                    const isSpecialWork = workdays.includes(dateStr);
+                    if ((isWeekend && !isSpecialWork) || isHoliday) {
+                        cls += ' rest';
+                    } else {
+                        cls += ' work';
+                    }
+                }
+
+                if (dateStr === todayStr) cls += ' today';
+                if (ts < startTs || ts > endTs) cls += ' out-of-range';
+
+                html += `<td class='${cls}'>${day}</td>`;
+            }
+
+            // 尾部补位
+            const lastDow = isoDayOf(new Date(year, month, lastDayNum));
+            for (let i = lastDow; i < 7; i++) html += '<td></td>';
+            html += '</tr></tbody></table></div>';
+        }
+
+        container.innerHTML = html;
+
+        // 只有一个月时不显示展开按钮（对应原 date.php 的 $monthCount > 1 判断）
+        if (toggleWrap) {
+            toggleWrap.style.display = months.length > 1 ? '' : 'none';
+        }
+    }
+
+    // ==================== 日历展开/收起 ====================
+    // 大屏（>768px）默认展开全部月份；小屏（手机）默认只显示当前月份
+    let calendarExpanded = window.innerWidth > 768;
+    let calendarViewportDesktop = calendarExpanded; // 记录当前断点状态
+
+    function applyCalendarState() {
+        const container = document.getElementById('calendar-container');
+        const btn = document.getElementById('calendar-toggle-btn');
+        if (!container || !btn) return;
+        if (calendarExpanded) {
+            container.classList.add('expanded');
+            btn.textContent = '仅展示当前月份';
+        } else {
+            container.classList.remove('expanded');
+            btn.textContent = '展开本学期全部月份';
+        }
+    }
+
+    function toggleCalendarMonths() {
+        calendarExpanded = !calendarExpanded;
+        applyCalendarState();
+    }
+
+    // 仅在窗口尺寸跨过断点（大屏↔小屏）时自动切换，不干扰手动操作
+    window.addEventListener('resize', function() {
+        const isDesktop = window.innerWidth > 768;
+        if (isDesktop !== calendarViewportDesktop) {
+            calendarViewportDesktop = isDesktop;
+            calendarExpanded = isDesktop;
+            applyCalendarState();
+        }
+    });
+
+    // ==================== 初始化流程 ====================
+    async function init() {
+        // 0. 先用本地缓存/默认值渲染，避免接口返回前日历空白
+        loadLocalConfig();
+        renderCalendar();
+        applyCalendarState();
+
+        // 1. 从服务端加载配置
+        try {
+            const resp = await fetch('/api/get_settings');
+            const json = await resp.json();
+            if (json.success && json.data) {
+                applyJSONConfig(json.data);
+                // 合并额外配置字段（如 announcement_auto_close 等）
+                Object.assign(config, json.data);
+                // 同步到 localStorage（方便离线查看）
+                localStorage.setItem('semester_config', JSON.stringify(json.data));
+            }
+        } catch (e) {
+            // API 不可用，已回退到 localStorage 或默认值
+        }
+
+        // 2. 用最终配置重绘日历
+        renderCalendar();
+        applyCalendarState();
+
+        // 3. 加载公告（公告始终从服务器获取）
+        try {
+            const resp = await fetch('/api/get_announcement');
+            const json = await resp.json();
+            if (json.success && json.data && json.data.content) {
+                showAnnouncement(json.data.content);
+            }
+        } catch (e) {}
+
+        // 4. 启动计时器
+        setInterval(update, 250);
+        update();
+    }
+
+    function loadLocalConfig() {
+        const saved = localStorage.getItem('semester_config');
+        if (saved) {
+            try {
+                const jsonSettings = JSON.parse(saved);
+                applyJSONConfig(jsonSettings);
+                return;
+            } catch (e) {}
+        }
+        // 无缓存时也要把默认配置应用一遍，保证 CSS 变量和头部信息正确
+        applyConfig({});
+    }
+
+    // ==================== Markdown 渲染 ====================
+    function markdownToHtml(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`(.+?)`/g, '<code>$1</code>')
+            .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+            .replace(/\n/g, '<br>');
+    }
+
+    // ==================== 公告消息条 ====================
+    let annTimer = null;
+
+    function showAnnouncement(content) {
+        const bar = document.getElementById('announcement-bar');
+        const contentDiv = document.getElementById('announcement-content');
+        const progress = document.getElementById('ann-progress');
+
+        contentDiv.innerHTML = markdownToHtml(content);
+        bar.classList.remove('hidden');
+
+        // 自动关闭进度条
+        const closeSec = parseInt(config.announcement_auto_close) || 5;
+        const closeMs = closeSec * 1000;
+        progress.style.transition = 'none';
+        progress.style.width = '100%';
+        // 触发重排后开始过渡
+        progress.offsetHeight;
+        progress.style.transition = `width ${closeMs}ms linear`;
+        progress.style.width = '0%';
+
+        if (annTimer) clearTimeout(annTimer);
+        annTimer = setTimeout(function() {
+            closeAnnouncement();
+        }, closeMs);
+    }
+
+    function closeAnnouncement() {
+        document.getElementById('announcement-bar').classList.add('hidden');
+        if (annTimer) { clearTimeout(annTimer); annTimer = null; }
+    }
+
+    // ==================== PWA / 注册 Service Worker ====================
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(function(err) {
+            console.log('SW注册失败:', err);
+        });
+    }
+
+    // ==================== 启动 ====================
+    init();
+</script>
+</body>
+</html>

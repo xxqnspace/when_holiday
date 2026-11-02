@@ -1,0 +1,21 @@
+# Cloudflare Pages 自定义响应头
+# 文档：https://developers.cloudflare.com/pages/configuration/headers/
+#
+# 注意：本文件只对静态资源生效，Functions（/api/*）的响应头
+# 由 functions/_lib/util.js 里的 jsonResponse() 设置，不受这里控制。
+
+# HTML 每次都要回源验证，否则部署新版本后用户可能仍看到旧页面
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# 站点根路径（由 Pages 返回 index.html）
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Service Worker 必须能及时更新，否则客户端会一直跑旧版本
+/sw.js
+  Cache-Control: no-cache
+
+# 图标内容固定不变，可以放心长缓存
+/icons/*
+  Cache-Control: public, max-age=2592000

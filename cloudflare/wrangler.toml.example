@@ -1,0 +1,29 @@
+# Pages / D1 配置模板
+#
+# ⚠️ 使用前提
+#   1. 仅「方式二：Wrangler 命令行部署」需要本文件。
+#   2. 如果你走的是 Git 集成 + Cloudflare 控制台配置（方式一），
+#      **不要**把这个文件改名为 wrangler.toml —— 一旦存在，Pages 会优先读取它，
+#      控制台里的构建配置和 D1 绑定可能被覆盖。
+#   3. 本目录是 when_holiday 仓库的子目录，复制后的 wrangler.toml 应放在 cloudflare/ 下，
+#      所有 wrangler 命令也在 cloudflare/ 内执行。
+#
+# 用法：
+#   cd cloudflare
+#   cp wrangler.toml.example wrangler.toml
+#   # 执行 npx wrangler d1 create holiday，把输出的 database_id 填到下面
+#   # 然后取消 [[d1_databases]] 整段的注释
+
+name = "holiday"
+compatibility_date = "2026-10-01"
+pages_build_output_dir = "public"
+
+# [[d1_databases]]
+# binding = "DB"                                  # 必须叫 DB，代码里按这个名字取绑定
+# database_name = "holiday"
+# database_id = "填 wrangler d1 create 输出的 database_id"
+
+# 不写也可以，代码里有同样的默认值
+# [vars]
+# PBKDF2_ITERATIONS = "3000"
+# SESSION_DAYS = "30"
