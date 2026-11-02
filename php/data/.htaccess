@@ -1,0 +1,8 @@
+# 禁止 Web 直接访问 data 目录（包含 db.json 数据和 .bak 备份）
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

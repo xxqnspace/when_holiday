@@ -1,5 +1,6 @@
 # Python 版运行时数据（SQLite + 背景图缓存，含用户密码哈希，不入库）
-data/
+# 注意用 /data/ 而不是 data/：后者会连 php/data/ 一起忽略
+/data/
 __pycache__/
 *.pyc
 
