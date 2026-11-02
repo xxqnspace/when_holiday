@@ -1,0 +1,27 @@
+[Unit]
+Description=Holiday 什么时候放假啊（学期倒计时 / VPS 版）
+Documentation=file:///opt/holiday/DEPLOY-VPS.md
+After=network.target
+
+[Service]
+Type=simple
+User=holiday
+Group=holiday
+WorkingDirectory=/opt/holiday
+Environment=PORT=28417
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Shanghai
+Environment=PBKDF2_ITERATIONS=600000
+Environment=SESSION_DAYS=30
+ExecStart=/usr/bin/python3 /opt/holiday/app.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ReadWritePaths=/opt/holiday/data
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

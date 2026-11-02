@@ -1,4 +1,9 @@
-# 运行时数据（含用户密码哈希等敏感信息，不入库）
-data/db.json.php
-data/*.tmp
-data/.lock
+# Python 版运行时数据（SQLite + 背景图缓存，含用户密码哈希，不入库）
+data/
+__pycache__/
+*.pyc
+
+# PHP 版运行时数据
+php/data/db.json.php
+php/data/*.tmp
+php/data/.lock

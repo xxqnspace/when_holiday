@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" href="icons/icon-96.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <meta name="theme-color" content="#ffffff">
+    <title>管理面板 - 学期倒计时</title>
+    <!-- Open Graph 协议：微信等社交平台分享图文卡片
+         部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
+    <meta property="og:title" content="管理面板 - 学期倒计时">
+    <meta property="og:description" content="学期倒计时后台管理面板，可配置学期起止日期、节假日与调休安排。">
+    <meta property="og:image" content="/icons/icon-512.png">
+    <meta property="og:url" content="/admin.html">
+    <meta property="og:type" content="website">
+    <style>
+        /* ============================================================
+           设计令牌
+           ============================================================ */
+        :root {
+            --bg: #f5f6fa;
+            --surface: #ffffff;
+            --surface-2: #fafbfd;
+            --border: #e7e9f2;
+            --border-strong: #d9dde9;
+            --text: #17203a;
+            --text-2: #5a6580;
+            --muted: #8d97ad;
+            --primary: #4f5bd5;
+            --primary-hover: #4149c4;
+            --primary-soft: #eef0fe;
+            --success: #0e9f6e;
+            --success-hover: #0b8a5f;
+            --danger: #e5484d;
+            --danger-hover: #ce3b40;
+            --radius-lg: 16px;
+            --radius: 12px;
+            --radius-sm: 9px;
+            --shadow-1: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .03);
+            --shadow-2: 0 4px 6px -2px rgba(16, 24, 40, .04), 0 12px 28px -8px rgba(16, 24, 40, .10);
+            --ring: 0 0 0 3px rgba(79, 91, 213, .16);
+            --sidebar-w: 248px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                         "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 权限控制：管理菜单与对应 Tab 仅管理员可见 */
+        body:not(.is-admin) .admin-only { display: none !important; }
+
+        /* ============================================================
+           侧边栏
+           ============================================================ */
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            width: var(--sidebar-w);
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            z-index: 100;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 20px 18px 18px;
+        }
+        .logo-mark {
+            width: 36px; height: 36px;
+            flex: 0 0 36px;
+            display: grid; place-items: center;
+            border-radius: 11px;
+            background: linear-gradient(135deg, #6366f1, #4f5bd5);
+            color: #fff;
+            font-size: 15px;
+            box-shadow: 0 4px 10px -2px rgba(79, 91, 213, .45);
+        }
+        .logo-text { min-width: 0; }
+        .logo-text h2 {
+            font-size: 15px;
+            font-weight: 650;
+            letter-spacing: -.01em;
+            color: var(--text);
+            white-space: nowrap;
+        }
+        .logo-text .ver {
+            font-size: 11.5px;
+            color: var(--muted);
+            margin-top: 1px;
+            white-space: nowrap;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 6px 12px 12px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        .nav-section {
+            font-size: 10.5px;
+            font-weight: 650;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+            color: var(--muted);
+            padding: 16px 10px 7px;
+        }
+        .sidebar-nav a {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 9px 12px;
+            margin-bottom: 2px;
+            border-radius: var(--radius-sm);
+            color: var(--text-2);
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s ease, color .15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .sidebar-nav a .icon {
+            width: 18px;
+            font-size: 14px;
+            text-align: center;
+            color: var(--muted);
+            transition: color .15s ease;
+        }
+        .sidebar-nav a:hover { background: #f4f5fa; color: var(--text); }
+        .sidebar-nav a:hover .icon { color: var(--text-2); }
+        .sidebar-nav a.active {
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .sidebar-nav a.active .icon { color: var(--primary); }
+
+        .sidebar-footer {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .user-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 10px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+        .user-avatar {
+            width: 30px; height: 30px;
+            flex: 0 0 30px;
+            display: grid; place-items: center;
+            border-radius: 50%;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-size: 13px;
+        }
+        .user-meta { min-width: 0; }
+        .user-meta strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 1px 7px;
+            border-radius: 6px;
+            font-size: 10.5px;
+            font-weight: 600;
+            letter-spacing: .01em;
+            margin-top: 2px;
+            line-height: 1.6;
+            white-space: nowrap;
+        }
+        .role-badge.admin { background: #fff4e5; color: #b45309; }
+        .role-badge.user { background: #e8f1ff; color: #1d4ed8; }
+
+        .footer-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .footer-link {
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 7px 8px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--text-2);
+            text-decoration: none;
+            transition: background .15s ease, color .15s ease;
+        }
+        .footer-link:hover { background: #f4f5fa; color: var(--text); }
+        .footer-link.danger:hover { background: #fdf0f0; color: var(--danger); }
+
+        /* 移动端遮罩 */
+        .scrim {
+            position: fixed;
+            inset: 0;
+            background: rgba(23, 32, 58, .38);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .22s ease;
+            z-index: 99;
+        }
+
+        /* ============================================================
+           主区域
+           ============================================================ */
+        .main {
+            margin-left: var(--sidebar-w);
+            padding: 26px 32px 56px;
+            min-height: 100vh;
+        }
+        .main-inner {
+            max-width: 1040px;
+            margin: 0 auto;
+        }
+
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .page-head-text { flex: 1; min-width: 0; }
+        .page-head h1 {
+            font-size: 21px;
+            font-weight: 680;
+            letter-spacing: -.02em;
+            color: var(--text);
+            line-height: 1.3;
+        }
+        .page-head p {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 3px;
+        }
+
+        .icon-btn {
+            display: none;
+            width: 38px; height: 38px;
+            flex: 0 0 38px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-2);
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            cursor: pointer;
+            box-shadow: var(--shadow-1);
+        }
+        .icon-btn:active { background: var(--surface-2); }
+
+        /* ============================================================
+           卡片
+           ============================================================ */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 22px 24px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-1);
+        }
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14.5px;
+            font-weight: 650;
+            letter-spacing: -.01em;
+            color: var(--text);
+            margin-bottom: 18px;
+        }
+        .card-title::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+        }
+
+        /* 配色卡片：7 组颜色排成自适应网格，避免一长串竖排 */
+        .card-colors {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+            gap: 15px 20px;
+        }
+        .card-colors .card-title {
+            grid-column: 1 / -1;
+            margin-bottom: 2px;
+        }
+        .card-colors .form-row { margin-bottom: 0; }
+
+        /* ============================================================
+           表单
+           ============================================================ */
+        .form-row {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 14px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .form-row:last-child { margin-bottom: 0; }
+        .form-group { flex: 1; min-width: 170px; }
+        .form-group > label {
+            display: block;
+            color: var(--text-2);
+            margin-bottom: 6px;
+            font-size: 12.5px;
+            font-weight: 550;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 9px 12px;
+            min-height: 40px;
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-family: inherit;
+            color: var(--text);
+            background: var(--surface);
+            outline: none;
+            transition: border-color .16s ease, box-shadow .16s ease;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .form-group select {
+            background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238d97ad' d='M6 8.5 1.5 4h9z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
+        }
+        .form-group input::placeholder,
+        .form-group textarea::placeholder { color: #b3bbcd; }
+        .form-group input:hover,
+        .form-group select:hover,
+        .form-group textarea:hover { border-color: #c9cfdf; }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--primary);
+            box-shadow: var(--ring);
+        }
+        .form-group input:disabled,
+        .form-group select:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+        .form-group textarea { resize: vertical; min-height: 104px; line-height: 1.6; }
+        .form-group .hint,
+        .hint {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+        /* 背景设置里的状态行：和下面的字段拉开一点，避免挤在一起 */
+        #bg-status { margin-bottom: 20px; }
+        /* ===== 每日壁纸公告：状态矩阵 + 效果预览 ===== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1px;
+            margin: 16px 0 14px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .info-grid > div {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            min-width: 0;
+            padding: 9px 12px;
+            background: var(--surface-2);
+            font-size: 12.5px;
+        }
+        .info-grid span { flex: 0 0 auto; color: var(--muted); }
+        .info-grid strong {
+            min-width: 0;
+            overflow: hidden;
+            color: var(--text);
+            font-weight: 600;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+        .info-grid .wide { grid-column: 1 / -1; }
+        .info-grid .wrap strong { white-space: normal; overflow-wrap: anywhere; }
+        .info-demo-label {
+            margin-bottom: 6px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .info-demo {
+            padding: 12px 14px;
+            min-height: 64px;
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .info-demo strong { font-weight: 700; }
+        .info-demo .is-off { color: var(--muted); }
+        @media (max-width: 560px) {
+            .info-grid { grid-template-columns: minmax(0, 1fr); }
+        }
+        #bg-info-preview { margin-bottom: 0; }
+        .form-group input[type="color"] {
+            width: 44px;
+            min-width: 44px;
+            height: 40px;
+            padding: 3px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            flex: 0 0 44px;
+        }
+        .color-picker-row { display: flex; align-items: center; gap: 10px; }
+        .color-picker-row input[type="text"] { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+        /* 滑块 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 22px;
+            min-height: 22px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            cursor: pointer;
+        }
+        input[type="range"]:focus { box-shadow: none; }
+        input[type="range"]:focus-visible { box-shadow: var(--ring); border-radius: 999px; }
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 5px;
+            border-radius: 999px;
+            background: #dce0ec;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 17px;
+            height: 17px;
+            margin-top: -6px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid var(--border-strong);
+            box-shadow: 0 1px 4px rgba(16, 24, 40, .18);
+        }
+        input[type="range"]::-moz-range-track {
+            height: 5px;
+            border-radius: 999px;
+            background: #dce0ec;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid var(--border-strong);
+            box-shadow: 0 1px 4px rgba(16, 24, 40, .18);
+        }
+
+        /* ============================================================
+           按钮
+           ============================================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            height: 40px;
+            padding: 0 17px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+        .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 1px 2px rgba(79, 91, 213, .28); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: #fff; box-shadow: 0 1px 2px rgba(14, 159, 110, .28); }
+        .btn-success:hover { background: var(--success-hover); }
+        .btn-danger { background: #fff; color: var(--danger); border-color: #f3cccd; }
+        .btn-danger:hover { background: #fdf1f1; border-color: #eab0b1; }
+        .btn-outline { background: var(--surface); color: var(--text-2); border-color: var(--border-strong); }
+        .btn-outline:hover { background: var(--surface-2); color: var(--text); border-color: #c9cfdf; }
+        .btn-sm { height: 32px; padding: 0 12px; font-size: 12.5px; border-radius: 8px; }
+
+        .btn-row { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+        /* ============================================================
+           表格
+           ============================================================ */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 0 -6px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+        }
+        th {
+            background: var(--surface-2);
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 11.5px;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            padding: 10px 14px;
+            text-align: left;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #f1f2f8;
+            vertical-align: middle;
+            color: var(--text-2);
+        }
+        td:first-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+        tbody tr { transition: background .12s ease; }
+        tbody tr:hover td { background: #fafbfe; }
+        tbody tr:last-child td { border-bottom: none; }
+        td .btn + .btn { margin-left: 6px; }
+
+        /* ============================================================
+           Toast
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 18px;
+            right: 18px;
+            z-index: 9999;
+            display: none;
+            max-width: min(380px, calc(100vw - 36px));
+            padding: 13px 18px 13px 46px;
+            border-radius: var(--radius);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 13.5px;
+            font-weight: 500;
+            box-shadow: var(--shadow-2);
+            animation: toastIn .26s cubic-bezier(.16, 1, .3, 1);
+        }
+        .toast::before {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 21px; height: 21px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.success::before { content: "\2713"; background: var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+        .toast.error::before { content: "!"; background: var(--danger); }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-10px) scale(.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ============================================================
+           Tab 内容区
+           ============================================================ */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeUp .24s ease both; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================================================
+           进度条预览
+           ============================================================ */
+        .preview-box {
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius);
+            padding: 22px;
+            background:
+                linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+                repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,.012) 6px, rgba(0,0,0,.012) 12px);
+        }
+        .preview-bar {
+            height: 14px;
+            border-radius: 999px;
+            width: 65%;
+            background: linear-gradient(90deg, var(--preview-start, #7ed957), var(--preview-end, #2e8b57));
+            box-shadow: 0 2px 6px -2px rgba(16, 24, 40, .25);
+        }
+        #preview-percent {
+            margin-top: 14px;
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: -.02em;
+            font-variant-numeric: tabular-nums;
+            color: var(--preview-percent, #4f5bd5);
+        }
+
+        /* ============================================================
+           标签（假期 / 补班）
+           ============================================================ */
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 4px;
+            min-height: 4px;
+        }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px 5px 11px;
+            background: #f4f5fb;
+            border: 1px solid #e6e8f4;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--text-2);
+            font-variant-numeric: tabular-nums;
+            transition: border-color .15s ease, background .15s ease;
+        }
+        .tag:hover { border-color: #d3d7e8; background: #eff1f9; }
+        .tag .remove-tag {
+            display: grid;
+            place-items: center;
+            width: 17px; height: 17px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1;
+            transition: background .15s ease, color .15s ease;
+        }
+        .tag .remove-tag:hover { background: #fbe3e3; color: var(--danger); }
+
+        /* ============================================================
+           加载遮罩
+           ============================================================ */
+        #boot-loading {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: var(--bg);
+            color: var(--muted);
+            font-size: 13px;
+        }
+        #boot-loading::before {
+            content: "";
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            border: 2.5px solid #dfe3ef;
+            border-top-color: var(--primary);
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ============================================================
+           响应式
+           ============================================================ */
+        @media (max-width: 900px) {
+            .sidebar {
+                width: 264px;
+                transform: translateX(-100%);
+                transition: transform .26s cubic-bezier(.16, 1, .3, 1);
+                box-shadow: none;
+                border-right: 1px solid var(--border);
+            }
+            .sidebar.expanded {
+                transform: translateX(0);
+                box-shadow: 0 20px 50px -12px rgba(16, 24, 40, .35);
+            }
+            .sidebar.expanded ~ .scrim { opacity: 1; pointer-events: auto; }
+
+            .main {
+                margin-left: 0;
+                padding: 16px 16px 48px;
+            }
+            .icon-btn { display: inline-flex; }
+            .page-head { align-items: center; margin-bottom: 18px; }
+            .page-head h1 { font-size: 18px; }
+            .page-head p { display: none; }
+            .hide-sm { display: none; }
+
+            .card { padding: 18px 16px; border-radius: 14px; }
+            .form-row { gap: 12px; }
+            /* 窄屏收紧表格，避免 5 列挤不下要横向拖 */
+            .table-wrap { margin: 0; }
+            th { padding: 9px 10px; font-size: 11px; letter-spacing: .02em; }
+            td { padding: 10px; font-size: 12.5px; }
+            td .btn-sm { padding: 0 9px; }
+            /* 输入框字号≥16px，避免 iOS 聚焦自动放大页面 */
+            .form-group input,
+            .form-group select,
+            .form-group textarea { font-size: 16px; }
+            .toast { top: 12px; right: 12px; left: 12px; max-width: none; }
+        }
+
+        @media (min-width: 901px) {
+            .scrim { display: none; }
+        }
+
+        /* 小屏手机（iPhone mini/SE 一类）：再收紧一点，保证 5 列表格不需要横拖 */
+        @media (max-width: 430px) {
+            th, td { padding-left: 8px; padding-right: 8px; }
+            td .btn-sm { padding: 0 8px; }
+            .main { padding-left: 12px; padding-right: 12px; }
+            .card { padding: 16px 14px; }
+        }
+
+        /* 公告表有 7 列，窄屏下改成卡片式列表：每行变成一张小卡片，
+           用 nth-child 的 ::before 补字段名（JS 生成的 DOM 里没有 data 属性） */
+        @media (max-width: 640px) {
+            #tab-announcement .table-wrap {
+                border: 0;
+                overflow: visible;
+                margin: 0;
+            }
+            #tab-announcement table,
+            #tab-announcement tbody,
+            #tab-announcement tr,
+            #tab-announcement td { display: block; width: auto; }
+            #tab-announcement thead { display: none; }
+
+            #tab-announcement tbody tr {
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 11px 13px;
+                margin-bottom: 9px;
+                background: var(--surface);
+            }
+            #tab-announcement tbody tr:last-child { margin-bottom: 0; }
+            #tab-announcement tbody tr:hover td { background: transparent; }
+
+            #tab-announcement td {
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+                border: 0;
+                padding: 2px 0;
+                font-size: 12.5px;
+                color: var(--text-2);
+            }
+            #tab-announcement td::before {
+                flex: 0 0 44px;
+                color: var(--muted);
+                font-size: 11.5px;
+            }
+            /* ID 对人没意义，藏掉 */
+            #tab-announcement td:nth-child(1) { display: none; }
+            /* 内容当标题，去掉截断内联样式（JS 里写死的 max-width/nowrap） */
+            #tab-announcement td:nth-child(2) {
+                max-width: none !important;
+                white-space: normal !important;
+                overflow: visible !important;
+                text-overflow: clip !important;
+                color: var(--text);
+                font-weight: 550;
+                padding-bottom: 6px;
+            }
+            #tab-announcement td:nth-child(2)::before { content: none; }
+            #tab-announcement td:nth-child(3)::before { content: "开始"; }
+            #tab-announcement td:nth-child(4)::before { content: "结束"; }
+            #tab-announcement td:nth-child(5)::before { content: "状态"; }
+            #tab-announcement td:nth-child(6) { display: none; }
+            #tab-announcement td:nth-child(7) { padding-top: 8px; }
+            #tab-announcement td:nth-child(7)::before { content: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                transition-duration: .01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 登录态确认中的遮罩，避免未授权内容一闪而过 -->
+<div id="boot-loading">正在加载…</div>
+
+<!-- 侧边栏 -->
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-mark"><i class="fa-solid fa-chart-simple"></i></div>
+        <div class="logo-text">
+            <h2>管理面板</h2>
+            <div class="ver">学期倒计时 v4.0</div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <div class="nav-section admin-only">系统管理</div>
+        <a class="admin-only" data-tab="tab-users"><span class="icon"><i class="fa-solid fa-users"></i></span> <span>用户管理</span></a>
+        <a class="admin-only" data-tab="tab-semester"><span class="icon"><i class="fa-solid fa-calendar-days"></i></span> <span>学期配置</span></a>
+        <a class="admin-only" data-tab="tab-appearance"><span class="icon"><i class="fa-solid fa-palette"></i></span> <span>界面配色</span></a>
+        <a class="admin-only" data-tab="tab-background"><span class="icon"><i class="fa-solid fa-image"></i></span> <span>背景设置</span></a>
+        <a class="admin-only" data-tab="tab-announcement"><span class="icon"><i class="fa-solid fa-bullhorn"></i></span> <span>公告管理</span></a>
+        <div class="nav-section">账号</div>
+        <a data-tab="tab-password"><span class="icon"><i class="fa-solid fa-key"></i></span> <span>修改密码</span></a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="user-card">
+            <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+            <div class="user-meta">
+                <strong id="sidebar-username">—</strong>
+                <span class="role-badge" id="sidebar-role">—</span>
+            </div>
+        </div>
+        <div class="footer-actions">
+            <a class="footer-link" href="index.html"><i class="fa-solid fa-house"></i> 首页</a>
+            <a class="footer-link danger" href="#" onclick="logout();return false;"><i class="fa-solid fa-arrow-right-from-bracket"></i> 退出</a>
+        </div>
+    </div>
+</aside>
+
+<div class="scrim"></div>
+
+<!-- 主区域 -->
+<main class="main">
+    <div class="main-inner">
+        <header class="page-head">
+            <button class="icon-btn" type="button" aria-label="打开菜单" onclick="event.stopPropagation();toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="page-head-text">
+                <h1 id="tab-title">加载中…</h1>
+                <p id="tab-desc"></p>
+            </div>
+            <a class="btn btn-outline btn-sm hide-sm" href="index.html">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> 访问首页
+            </a>
+        </header>
+
+        <div id="toast" class="toast"></div>
+
+        <!-- ==================== 用户管理 Tab ==================== -->
+        <div class="tab-content admin-only" id="tab-users">
+            <div class="card">
+                <div class="card-title">新建用户</div>
+                <div class="form-row">
+                    <div class="form-group"><label>用户名</label><input type="text" id="new-username" placeholder="登录用户名"></div>
+                    <div class="form-group"><label>密码</label><input type="password" id="new-password" placeholder="至少 6 位"></div>
+                    <div class="form-group"><label>角色</label>
+                        <select id="new-role"><option value="user">普通用户</option><option value="admin">管理员</option></select>
+                    </div>
+                    <div class="form-group" style="flex:0 0 auto;"><label>&nbsp;</label><button class="btn btn-primary" onclick="createUser()"><i class="fa-solid fa-plus"></i> 创建</button></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">用户列表</div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+                        <tbody id="user-table-body"><tr><td colspan="5" style="text-align:center;color:#8d97ad;padding:22px 0;">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 编辑用户弹窗 -->
+            <div class="card" id="edit-user-panel" style="display:none;">
+                <div class="card-title">编辑用户</div>
+                <div class="form-row">
+                    <input type="hidden" id="edit-user-id">
+                    <div class="form-group"><label>用户名</label><input type="text" id="edit-username" disabled></div>
+                    <div class="form-group"><label>新密码（留空不修改）</label><input type="password" id="edit-password" placeholder="留空则不修改"></div>
+                    <div class="form-group"><label>角色</label><select id="edit-role"><option value="user">普通用户</option><option value="admin">管理员</option></select></div>
+                    <div class="form-group" style="flex:0 0 auto;">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary" onclick="updateUser()">保存</button>
+                        <button class="btn btn-outline" onclick="document.getElementById('edit-user-panel').style.display='none'">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 学期配置 Tab ==================== -->
+        <div class="tab-content admin-only" id="tab-semester">
+            <div class="card">
+                <div class="card-title">学期时间</div>
+                <div class="form-row">
+                    <div class="form-group"><label>学期开始</label><input type="datetime-local" id="sem-start"></div>
+                    <div class="form-group"><label>学期结束</label><input type="datetime-local" id="sem-end"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">特殊假期</div>
+                <div class="form-row">
+                    <div class="form-group"><label>添加日期</label><input type="date" id="holiday-input"></div>
+                    <div class="form-group" style="flex:0 0 auto;"><label>&nbsp;</label><button class="btn btn-outline" onclick="addTag('holiday')"><i class="fa-solid fa-plus"></i> 添加</button></div>
+                </div>
+                <div class="tag-list" id="holiday-tags"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">特殊工作日（补班）</div>
+                <div class="form-row">
+                    <div class="form-group"><label>添加日期</label><input type="date" id="workday-input"></div>
+                    <div class="form-group" style="flex:0 0 auto;"><label>&nbsp;</label><button class="btn btn-outline" onclick="addTag('workday')"><i class="fa-solid fa-plus"></i> 添加</button></div>
+                </div>
+                <div class="tag-list" id="workday-tags"></div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-success" onclick="saveSemester()"><i class="fa-solid fa-floppy-disk"></i> 保存学期配置</button>
+            </div>
+        </div>
+
+        <!-- ==================== 界面配色 Tab ==================== -->
+        <div class="tab-content admin-only" id="tab-appearance">
+            <div class="card">
+                <div class="card-title">页面标题</div>
+                <div class="form-group"><input type="text" id="cfg-title" placeholder="显示在浏览器标签和页面顶部的标题"></div>
+            </div>
+
+            <div class="card card-colors">
+                <div class="card-title">主题配色</div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>主题色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-primary_color" value="#333333">
+                            <input type="text" id="cfg-primary_color-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>字体颜色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-font_color" value="#333333">
+                            <input type="text" id="cfg-font_color-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>页面背景</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-page_bg" value="#333333">
+                            <input type="text" id="cfg-page_bg-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>卡片背景</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-card_bg" value="#333333">
+                            <input type="text" id="cfg-card_bg-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>进度条起始色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-progress_bar_start" value="#333333">
+                            <input type="text" id="cfg-progress_bar_start-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>进度条结束色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-progress_bar_end" value="#333333">
+                            <input type="text" id="cfg-progress_bar_end-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>百分比颜色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="cfg-progress_percent_color" value="#333333">
+                            <input type="text" id="cfg-progress_percent_color-hex" placeholder="#000000" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">进度条预览</div>
+                <div class="preview-box">
+                    <div class="preview-bar" id="preview-bar"></div>
+                    <p id="preview-percent">65.432100%</p>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-success" onclick="saveAppearance()"><i class="fa-solid fa-floppy-disk"></i> 保存界面配置</button>
+            </div>
+        </div>
+
+        <!-- ==================== 背景设置 Tab ==================== -->
+        <div class="tab-content admin-only" id="tab-background">
+            <div class="card">
+                <div class="card-title">背景类型</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>背景模式</label>
+                        <select id="bg-type" onchange="toggleBgMode()">
+                            <option value="solid">纯色背景</option>
+                            <option value="image">图片背景</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="bg-solid-panel">
+                <div class="card-title">纯色背景</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>背景颜色</label>
+                        <div class="color-picker-row">
+                            <input type="color" id="bg-color" value="#f7f9fc">
+                            <input type="text" id="bg-color-hex" placeholder="#f7f9fc" maxlength="7">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="bg-image-panel" style="display:none;">
+                <div class="card-title">图片背景</div>
+                <div class="form-group">
+                    <label>图片源地址（第三方接口，由服务器每天拉取一次并缓存）</label>
+                    <input type="text" id="bg-image-url" placeholder="https://example.com/bg.jpg">
+                    <p class="hint" id="bg-status">缓存状态加载中…</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>图片透明度 <span id="bg-image-opacity-val" style="color:#4f5bd5;font-variant-numeric:tabular-nums;">30%</span></label>
+                        <input type="range" id="bg-image-opacity" min="0.1" max="1" step="0.05" value="0.3" oninput="document.getElementById('bg-image-opacity-val').textContent=(this.value*100).toFixed(0)+'%'">
+                    </div>
+                    <div class="form-group">
+                        <label>毛玻璃透明度 <span id="glass-opacity-val" style="color:#4f5bd5;font-variant-numeric:tabular-nums;">70%</span></label>
+                        <input type="range" id="glass-opacity" min="0.1" max="1" step="0.05" value="0.7" oninput="document.getElementById('glass-opacity-val').textContent=(this.value*100).toFixed(0)+'%'">
+                    </div>
+                </div>
+                <p class="hint">毛玻璃透明度越高，卡片越不透明；图片透明度越高，背景图越清晰。</p>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-success" onclick="saveBackground()"><i class="fa-solid fa-floppy-disk"></i> 保存背景配置</button>
+                <button class="btn btn-outline" onclick="refreshBg()"><i class="fa-solid fa-rotate"></i> 立即刷新缓存</button>
+            </div>
+
+            <div class="card" id="bg-info-panel" style="display:none;">
+                <div class="card-title">每日壁纸公告</div>
+                <p class="hint" style="margin-top:-2px;">首页打开时，把当天壁纸的标题与版权说明以顶部公告弹出。默认同一张图只弹一次，也可以设成每次打开都弹。</p>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开关</label>
+                        <select id="bg-info-announce" onchange="syncInfoAnnounceState()">
+                            <option value="1">启用</option>
+                            <option value="0">停用（不弹出）</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>弹出频率</label>
+                        <select id="bg-info-always">
+                            <option value="0">每天首次访问弹出（默认）</option>
+                            <option value="1">每次打开都弹出</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>停留时长（3–60 秒）</label>
+                        <input type="number" id="bg-info-seconds" min="3" max="60" step="1" placeholder="9">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>展示内容</label>
+                        <select id="bg-info-mode" onchange="toggleInfoMode()">
+                            <option value="auto">标题 + 版权（默认）</option>
+                            <option value="title">仅标题</option>
+                            <option value="custom">自定义文案</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>图片信息接口（返回当天标题与版权）</label>
+                        <input type="text" id="bg-info-url" placeholder="https://example.com/info.json">
+                    </div>
+                </div>
+
+                <div class="form-group" id="bg-info-template-group" style="display:none;">
+                    <label>自定义文案（支持 {title} 与 {copyright} 两个占位符）</label>
+                    <textarea id="bg-info-template" rows="2" placeholder="**今日壁纸：{title}**&#10;{copyright}"></textarea>
+                </div>
+
+                <div class="info-grid">
+                    <div><span>状态</span><strong id="bg-info-state">加载中…</strong></div>
+                    <div><span>壁纸日期</span><strong id="bg-info-date">—</strong></div>
+                    <div><span>信息抓取</span><strong id="bg-info-at">—</strong></div>
+                    <div><span>停留时长</span><strong id="bg-info-secs">—</strong></div>
+                    <div><span>弹出频率</span><strong id="bg-info-freq">—</strong></div>
+                    <div class="wide wrap"><span>标题</span><strong id="bg-info-title">—</strong></div>
+                    <div class="wide wrap"><span>版权</span><strong id="bg-info-copy">—</strong></div>
+                </div>
+
+                <div class="info-demo-label">按当前配置弹出时，首页看到的是：</div>
+                <div class="info-demo" id="bg-info-preview">当天抓取到的图片信息会显示在这里。</div>
+
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="saveBackground()"><i class="fa-solid fa-floppy-disk"></i> 保存公告配置</button>
+                    <button class="btn btn-outline" onclick="refreshBgInfo()"><i class="fa-solid fa-rotate"></i> 立即重抓信息</button>
+                    <button class="btn btn-outline" onclick="previewBgInfo()"><i class="fa-solid fa-eye"></i> 在本机预览</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 公告管理 Tab ==================== -->
+        <div class="tab-content admin-only" id="tab-announcement">
+            <div class="card">
+                <div class="card-title">编辑公告</div>
+                <div class="form-group"><label>公告内容（支持 Markdown 语法）</label><textarea id="ann-content" rows="5" placeholder="输入公告内容，例如：**本周五下午放假**"></textarea></div>
+                <div class="form-row">
+                    <div class="form-group"><label>开始展示</label><input type="datetime-local" id="ann-show-from"></div>
+                    <div class="form-group"><label>结束展示</label><input type="datetime-local" id="ann-show-until"></div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="ann-active"><option value="1">启用</option><option value="0">停用</option></select>
+                    </div>
+                </div>
+                <p class="hint">留空时间表示不限。公告以顶部消息条展示，支持 **粗体**、*斜体*、`代码`、[链接](url) 等 Markdown 语法。</p>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="saveAnnouncement()"><i class="fa-solid fa-floppy-disk"></i> 保存公告</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">公告自动关闭</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>自动关闭时间（秒）</label>
+                        <input type="number" id="ann-auto-close" min="1" max="60" value="5">
+                        <p class="hint">公告展示后自动关闭的秒数，默认 5 秒。</p>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="saveAnnouncementAutoClose()"><i class="fa-solid fa-floppy-disk"></i> 保存设置</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">公告列表</div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>内容</th><th>开始</th><th>结束</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                        <tbody id="ann-table-body"><tr><td colspan="7" style="text-align:center;color:#8d97ad;padding:22px 0;">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 修改密码 Tab ==================== -->
+        <div class="tab-content" id="tab-password">
+            <div class="card">
+                <div class="card-title">修改密码</div>
+                <div class="form-group"><label>原密码</label><input type="password" id="pw-old" placeholder="当前密码"></div>
+                <div class="form-group"><label>新密码</label><input type="password" id="pw-new" placeholder="至少 6 位"></div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="changePassword()">修改密码</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+// ==================== 全局状态 ====================
+// CSRF token 由 /api/session 下发（原 PHP 版是服务端注入到页面里的）
+window._csrfToken = '';
+let currentUser = null;
+
+function isAdmin() {
+    return !!currentUser && currentUser.role === 'admin';
+}
+
+// ==================== 工具函数 ====================
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + (type || 'success');
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+/**
+ * 统一的接口调用
+ * @param {string} action 接口名，对应 /api/<action>
+ * @param {object} [data] 有值则发 POST（JSON），否则发 GET
+ */
+async function api(action, data) {
+    const isWrite = !!data;
+    const headers = { 'X-CSRF-Token': window._csrfToken || '' };
+    if (isWrite) headers['Content-Type'] = 'application/json';
+
+    const resp = await fetch('/api/' + action, {
+        method: isWrite ? 'POST' : 'GET',
+        headers,
+        body: isWrite ? JSON.stringify(data) : undefined,
+    });
+    return resp.json();
+}
+
+function formatDateTime(phpStr) {
+    if (!phpStr) return '-';
+    return phpStr.replace(' ', 'T').substring(0, 16);
+}
+
+// ==================== Tab 切换 ====================
+const tabTitles = {
+    'tab-users': ['用户管理', '管理系统用户账号和权限'],
+    'tab-semester': ['学期配置', '设置学期起止时间、假期和补班日'],
+    'tab-appearance': ['界面配色', '自定义页面主题颜色和进度条样式'],
+    'tab-background': ['背景设置', '配置页面背景（纯色或图片）'],
+    'tab-announcement': ['公告管理', '编辑和管理首页公告弹窗'],
+    'tab-password': ['修改密码', '修改当前账号的登录密码'],
+};
+
+document.querySelectorAll('.sidebar-nav a').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const tabId = this.dataset.tab;
+        // 更新导航 active
+        document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+        this.classList.add('active');
+        // 更新内容区
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        // 更新标题
+        const [title, desc] = tabTitles[tabId] || [tabId, ''];
+        document.getElementById('tab-title').textContent = title;
+        document.getElementById('tab-desc').textContent = desc;
+        // 触发各 tab 的数据加载
+        if (tabId === 'tab-users') loadUsers();
+        if (tabId === 'tab-semester') loadSemester();
+        if (tabId === 'tab-appearance') loadAppearance();
+        if (tabId === 'tab-background') loadBackground();
+        if (tabId === 'tab-announcement') loadAnnouncements();
+        // 移动端抽屉：选中后自动收起
+        const sb = document.querySelector('.sidebar');
+        if (sb && window.innerWidth <= 900) sb.classList.remove('expanded');
+    });
+});
+
+// ==================== 启动：先确认登录态，再决定显示哪些菜单 ====================
+async function boot() {
+    let json;
+    try {
+        json = await api('session');
+    } catch (e) {
+        location.replace('login.html');
+        return;
+    }
+
+    if (!json.success || !json.data || !json.data.logged_in) {
+        location.replace('login.html');
+        return;
+    }
+
+    currentUser = json.data.user;
+    window._csrfToken = json.data.csrf_token || '';
+
+    if (isAdmin()) {
+        document.body.classList.add('is-admin');
+    }
+
+    document.getElementById('sidebar-username').textContent = currentUser.username;
+    const roleBadge = document.getElementById('sidebar-role');
+    roleBadge.textContent = isAdmin() ? '管理员' : '普通用户';
+    roleBadge.className = 'role-badge ' + (isAdmin() ? 'admin' : 'user');
+
+    document.getElementById('boot-loading').style.display = 'none';
+
+    // 激活第一个可见的 tab：管理员进用户管理，普通用户进修改密码
+    const firstTab = isAdmin()
+        ? document.querySelector('.sidebar-nav a[data-tab="tab-users"]')
+        : document.querySelector('.sidebar-nav a[data-tab="tab-password"]');
+    if (firstTab) firstTab.click();
+}
+
+// ==================== 用户管理 ====================
+async function loadUsers() {
+    if (!isAdmin()) return;
+    try {
+        const json = await api('get_users');
+        const tbody = document.getElementById('user-table-body');
+        if (json.success) {
+            tbody.innerHTML = json.data.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td>${escapeHtml(u.username)}</td>
+                    <td><span class="role-badge ${u.role}">${u.role === 'admin' ? '管理员' : '普通用户'}</span></td>
+                    <td>${u.created_at || '-'}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick="editUser(${u.id}, '${escapeHtml(u.username)}', '${u.role}')">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (e) { showToast('加载用户失败', 'error'); }
+}
+
+function editUser(id, username, role) {
+    document.getElementById('edit-user-id').value = id;
+    document.getElementById('edit-username').value = username;
+    document.getElementById('edit-role').value = role;
+    document.getElementById('edit-password').value = '';
+    document.getElementById('edit-user-panel').style.display = 'block';
+}
+
+async function createUser() {
+    const username = document.getElementById('new-username').value.trim();
+    const password = document.getElementById('new-password').value;
+    const role = document.getElementById('new-role').value;
+    if (!username || password.length < 6) return showToast('用户名不能为空，密码至少6位', 'error');
+    const json = await api('create_user', { username, password, role });
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) { document.getElementById('new-username').value = ''; document.getElementById('new-password').value = ''; loadUsers(); }
+}
+
+async function updateUser() {
+    const id = document.getElementById('edit-user-id').value;
+    const role = document.getElementById('edit-role').value;
+    const pw = document.getElementById('edit-password').value;
+    const data = { user_id: id, role };
+    if (pw) data.new_password = pw;
+    const json = await api('update_user', data);
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) { document.getElementById('edit-user-panel').style.display = 'none'; loadUsers(); }
+}
+
+async function deleteUser(id, username) {
+    if (!confirm(`确定删除用户 "${username}" 吗？此操作不可撤销。`)) return;
+    const json = await api('delete_user', { user_id: id });
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) loadUsers();
+}
+
+// ==================== 学期配置 ====================
+let semesterHolidays = [];
+let semesterWorkdays = [];
+
+async function loadSemester() {
+    try {
+        const json = await api('get_settings');
+        if (json.success) {
+            const s = json.data;
+            document.getElementById('sem-start').value = (s.start_date || '').replace(' ', 'T').substring(0, 16);
+            document.getElementById('sem-end').value = (s.end_date || '').replace(' ', 'T').substring(0, 16);
+            semesterHolidays = s.holidays ? (typeof s.holidays === 'string' ? JSON.parse(s.holidays) : s.holidays) : [];
+            semesterWorkdays = s.workdays ? (typeof s.workdays === 'string' ? JSON.parse(s.workdays) : s.workdays) : [];
+            renderTags('holiday-tags', semesterHolidays, 'holiday');
+            renderTags('workday-tags', semesterWorkdays, 'workday');
+        }
+    } catch (e) { showToast('加载配置失败', 'error'); }
+}
+
+function addTag(type) {
+    const inputId = type === 'holiday' ? 'holiday-input' : 'workday-input';
+    const input = document.getElementById(inputId);
+    const date = input.value;
+    if (!date) return showToast('请选择日期', 'error');
+    const list = type === 'holiday' ? semesterHolidays : semesterWorkdays;
+    if (list.includes(date)) return showToast('日期已存在', 'error');
+    list.push(date);
+    renderTags(type === 'holiday' ? 'holiday-tags' : 'workday-tags', list, type);
+    input.value = '';
+}
+
+function removeTag(type, index) {
+    const list = type === 'holiday' ? semesterHolidays : semesterWorkdays;
+    list.splice(index, 1);
+    renderTags(type === 'holiday' ? 'holiday-tags' : 'workday-tags', list, type);
+}
+
+function renderTags(containerId, list, type) {
+    document.getElementById(containerId).innerHTML = list.map((d, i) =>
+        `<span class="tag">${d} <span class="remove-tag" onclick="removeTag('${type}', ${i})">×</span></span>`
+    ).join('');
+}
+
+async function saveSemester() {
+    const startVal = document.getElementById('sem-start').value;
+    const endVal = document.getElementById('sem-end').value;
+    if (!startVal || !endVal) {
+        return showToast('请先填写学期开始和结束时间', 'error');
+    }
+    const startDate = startVal.replace('T', ' ') + ':00';
+    const endDate = endVal.replace('T', ' ') + ':00';
+    const json = await api('save_settings', {
+        settings: {
+            start_date: startDate,
+            end_date: endDate,
+            holidays: semesterHolidays,
+            workdays: semesterWorkdays,
+        }
+    });
+    showToast(json.message, json.success ? 'success' : 'error');
+}
+
+// ==================== 界面配色 ====================
+async function loadAppearance() {
+    try {
+        const json = await api('get_settings');
+        if (json.success) {
+            const s = json.data;
+            setColorField('primary_color', s.primary_color || '#5c6bc0');
+            setColorField('font_color', s.font_color || '#333333');
+            setColorField('page_bg', s.page_bg || '#f7f9fc');
+            setColorField('card_bg', s.card_bg || '#ffffff');
+            setColorField('progress_bar_start', s.progress_bar_start || '#7ed957');
+            setColorField('progress_bar_end', s.progress_bar_end || '#2e8b57');
+            setColorField('progress_percent_color', s.progress_percent_color || '#5c6bc0');
+            document.getElementById('cfg-title').value = s.title || '';
+            updatePreview();
+        }
+    } catch (e) { showToast('加载配置失败', 'error'); }
+}
+
+function setColorField(key, value) {
+    const colorInput = document.getElementById('cfg-' + key);
+    const hexInput = document.getElementById('cfg-' + key + '-hex');
+    if (colorInput) colorInput.value = value;
+    if (hexInput) hexInput.value = value;
+}
+
+// 双向同步颜色选择器和文本框
+document.addEventListener('input', function(e) {
+    if (e.target.id && e.target.id.startsWith('cfg-')) {
+        const id = e.target.id;
+        if (id.endsWith('-hex')) {
+            const baseId = id.replace('-hex', '');
+            const colorInput = document.getElementById(baseId);
+            if (colorInput && /^#[0-9a-fA-F]{6}$/.test(e.target.value)) {
+                colorInput.value = e.target.value;
+            }
+        } else {
+            const hexInput = document.getElementById(id + '-hex');
+            if (hexInput) hexInput.value = e.target.value;
+        }
+        updatePreview();
+    }
+});
+
+function updatePreview() {
+    const start = document.getElementById('cfg-progress_bar_start')?.value || '#7ed957';
+    const end = document.getElementById('cfg-progress_bar_end')?.value || '#2e8b57';
+    const percentColor = document.getElementById('cfg-progress_percent_color')?.value || '#5c6bc0';
+    document.getElementById('preview-bar').style.background = `linear-gradient(90deg, ${start}, ${end})`;
+    document.getElementById('preview-percent').style.color = percentColor;
+}
+
+async function saveAppearance() {
+    const settings = {
+        title: document.getElementById('cfg-title').value,
+        primary_color: document.getElementById('cfg-primary_color').value,
+        font_color: document.getElementById('cfg-font_color').value,
+        page_bg: document.getElementById('cfg-page_bg').value,
+        card_bg: document.getElementById('cfg-card_bg').value,
+        progress_bar_start: document.getElementById('cfg-progress_bar_start').value,
+        progress_bar_end: document.getElementById('cfg-progress_bar_end').value,
+        progress_percent_color: document.getElementById('cfg-progress_percent_color').value,
+    };
+    const json = await api('save_settings', { settings });
+    showToast(json.message, json.success ? 'success' : 'error');
+}
+
+// ==================== 背景设置 ====================
+async function loadBackground() {
+    try {
+        const json = await api('get_settings');
+        if (json.success) {
+            const s = json.data;
+            document.getElementById('bg-type').value = s.bg_type || 'solid';
+            document.getElementById('bg-color').value = s.bg_color || '#f7f9fc';
+            document.getElementById('bg-color-hex').value = s.bg_color || '#f7f9fc';
+            document.getElementById('bg-image-url').value = s.bg_upstream_url || '';
+            document.getElementById('bg-info-url').value = s.bg_info_url || '';
+            document.getElementById('bg-info-announce').value = String(s.bg_info_announce || '1');
+            document.getElementById('bg-info-always').value = String(s.bg_info_always || '0');
+            document.getElementById('bg-info-mode').value = s.bg_info_mode || 'auto';
+            document.getElementById('bg-info-seconds').value = parseInt(s.bg_info_seconds, 10) || 9;
+            document.getElementById('bg-info-template').value = s.bg_info_template || '';
+            syncInfoAnnounceState();
+            toggleInfoMode();
+            document.getElementById('bg-image-opacity').value = s.bg_image_opacity || '0.3';
+            document.getElementById('glass-opacity').value = s.glass_opacity || '0.7';
+            document.getElementById('bg-image-opacity-val').textContent = ((parseFloat(s.bg_image_opacity) || 0.3) * 100).toFixed(0) + '%';
+            document.getElementById('glass-opacity-val').textContent = ((parseFloat(s.glass_opacity) || 0.7) * 100).toFixed(0) + '%';
+            toggleBgMode();
+            loadBgStatus();
+        }
+    } catch (e) {}
+}
+
+// 背景图缓存状态：显示今天是否已缓存、多大、什么时候拉的
+async function loadBgStatus() {
+    const el = document.getElementById('bg-status');
+    if (!el) return;
+    try {
+        const json = await api('bg_status');
+        if (!json.success || !json.data) { el.textContent = ''; return; }
+        const d = json.data;
+        renderBgInfo(d);
+        if (!d.cached) {
+            el.textContent = '尚未缓存，下次访问首页时会自动从上面的地址拉取。';
+            return;
+        }
+        el.textContent = '当前缓存：' + d.date + (d.is_today ? '（今天，无需更新）' : '（已过期，下次访问会更新）')
+            + ' · ' + (d.bytes / 1048576).toFixed(1) + ' MB · 拉取于 ' + d.fetched_at;
+    } catch (e) {
+        el.textContent = '';
+    }
+}
+
+// 把 bg_status 的结果铺到「每日壁纸公告」卡片：状态矩阵 + 弹出效果预览
+function renderBgInfo(d) {
+    const ann = d.announce || {};
+    const on = ann.enabled !== false;
+    const put = function (id, text) {
+        const node = document.getElementById(id);
+        if (node) node.textContent = text;
+    };
+
+    put('bg-info-state', on ? '已启用' : '已停用');
+    put('bg-info-date', d.info_date
+        ? String(d.info_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3')
+        : '—');
+    put('bg-info-at', d.info_at || '—');
+    put('bg-info-secs', (ann.seconds || 9) + ' 秒');
+    put('bg-info-freq', on ? (ann.always ? '每次打开都弹出' : '每天首次弹出') : '—');
+    put('bg-info-title', d.title || '—');
+    put('bg-info-copy', d.copyright || '—');
+
+    const demo = document.getElementById('bg-info-preview');
+    if (!demo) return;
+    if (!on) {
+        demo.className = 'info-demo is-off';
+        demo.textContent = '公告已在后台停用，首页不会弹出这条消息。';
+        return;
+    }
+    if (!ann.content) {
+        demo.className = 'info-demo is-off';
+        demo.textContent = '没有抓取到图片信息（接口为空或返回异常），首页不会弹这条公告。可点「立即重抓信息」重试。';
+        return;
+    }
+    demo.className = 'info-demo';
+    demo.innerHTML = escapeHtml(ann.content).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+// 自定义文案只在 custom 模式下出现
+function toggleInfoMode() {
+    const mode = document.getElementById('bg-info-mode').value;
+    const group = document.getElementById('bg-info-template-group');
+    if (group) group.style.display = mode === 'custom' ? 'block' : 'none';
+}
+
+// 公告停用时，「弹出频率」没有意义，置灰避免误解
+function syncInfoAnnounceState() {
+    const announce = document.getElementById('bg-info-announce');
+    const freq = document.getElementById('bg-info-always');
+    if (!announce || !freq) return;
+    const on = announce.value !== '0';
+    freq.disabled = !on;   // 只置灰，不改值：重新启用后能恢复原来的频率设置
+}
+
+// 只重抓 info.json（标题/版权），不动已缓存的背景图
+async function refreshBgInfo() {
+    showToast('正在抓取图片信息…', 'success');
+    const json = await api('refresh_bg_info', {});
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) loadBgStatus();
+}
+
+// 清掉本浏览器的已读标记，跳首页看真实弹出效果
+function previewBgInfo() {
+    try { localStorage.removeItem('bg_info_seen'); } catch (e) {}
+    window.open('../', '_blank');
+}
+
+// 强制重新拉一次（换了源地址、或上游当天换了图时用）
+async function refreshBg() {
+    showToast('正在拉取新背景…', 'success');
+    const json = await api('refresh_bg', {});
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) loadBgStatus();
+}
+
+function toggleBgMode() {
+    const mode = document.getElementById('bg-type').value;
+    const isImage = mode === 'image';
+    document.getElementById('bg-solid-panel').style.display = mode === 'solid' ? 'block' : 'none';
+    document.getElementById('bg-image-panel').style.display = isImage ? 'block' : 'none';
+    // 壁纸公告只在图片背景模式下有意义，跟着一起显隐
+    const infoPanel = document.getElementById('bg-info-panel');
+    if (infoPanel) infoPanel.style.display = isImage ? 'block' : 'none';
+}
+
+// 颜色双向同步
+document.getElementById('bg-color')?.addEventListener('input', function() {
+    document.getElementById('bg-color-hex').value = this.value;
+});
+document.getElementById('bg-color-hex')?.addEventListener('input', function() {
+    if (/^#[0-9a-fA-F]{6}$/.test(this.value)) document.getElementById('bg-color').value = this.value;
+});
+
+async function saveBackground() {
+    const settings = {
+        bg_type: document.getElementById('bg-type').value,
+        bg_color: document.getElementById('bg-color').value,
+        bg_upstream_url: document.getElementById('bg-image-url').value,
+        bg_info_url: document.getElementById('bg-info-url').value,
+        bg_info_announce: document.getElementById('bg-info-announce').value,
+        bg_info_always: document.getElementById('bg-info-always').value,
+        bg_info_mode: document.getElementById('bg-info-mode').value,
+        bg_info_seconds: document.getElementById('bg-info-seconds').value,
+        bg_info_template: document.getElementById('bg-info-template').value,
+        bg_image_opacity: document.getElementById('bg-image-opacity').value,
+        glass_opacity: document.getElementById('glass-opacity').value,
+    };
+    const json = await api('save_settings', { settings });
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) loadBgStatus();   // 保存后刷新状态矩阵（弹出频率/时长会变）
+}
+
+// ==================== 公告管理 ====================
+async function loadAnnouncements() {
+    try {
+        const json = await api('get_announcements');
+        const tbody = document.getElementById('ann-table-body');
+        if (json.success) {
+            tbody.innerHTML = json.data.map(a => `
+                <tr>
+                    <td>${a.id}</td>
+                    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.content || '')}</td>
+                    <td>${a.show_from || '-'}</td>
+                    <td>${a.show_until || '-'}</td>
+                    <td>${a.is_active == 1 ? '<i class="fa-solid fa-circle-check" style="color:#0e9f6e;"></i> 启用' : '<i class="fa-solid fa-circle-pause" style="color:#8d97ad;"></i> 停用'}</td>
+                    <td>${a.created_at || '-'}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick="editAnnouncement(${a.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteAnnouncement(${a.id})">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        // 加载自动关闭时间
+        const sJson = await api('get_settings');
+        if (sJson.success && sJson.data) {
+            document.getElementById('ann-auto-close').value = sJson.data.announcement_auto_close || '5';
+        }
+    } catch (e) {}
+}
+
+async function saveAnnouncement() {
+    const fromVal = document.getElementById('ann-show-from').value;
+    const untilVal = document.getElementById('ann-show-until').value;
+    const data = {
+        content: document.getElementById('ann-content').value,
+        // 为空时传空字符串，后端会自动转为 null（表示不限时间）
+        show_from: fromVal ? fromVal.replace('T', ' ') + ':00' : '',
+        show_until: untilVal ? untilVal.replace('T', ' ') + ':00' : '',
+        is_active: document.getElementById('ann-active').value,
+    };
+    // 检查是否有正在编辑的公告 ID
+    if (window._editingAnnId) {
+        data.id = window._editingAnnId;
+        window._editingAnnId = null;
+    }
+    const json = await api('save_announcement', data);
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) {
+        document.getElementById('ann-content').value = '';
+        document.getElementById('ann-show-from').value = '';
+        document.getElementById('ann-show-until').value = '';
+        loadAnnouncements();
+    }
+}
+
+async function editAnnouncement(id) {
+    try {
+        const json = await api('get_announcements');
+        if (json.success) {
+            const ann = json.data.find(a => a.id == id);
+            if (ann) {
+                document.getElementById('ann-content').value = ann.content || '';
+                document.getElementById('ann-show-from').value = formatDateTime(ann.show_from);
+                document.getElementById('ann-show-until').value = formatDateTime(ann.show_until);
+                document.getElementById('ann-active').value = ann.is_active;
+                // 记录当前编辑的公告 ID，保存时带上（原版漏了这一步，会导致编辑变成新增）
+                window._editingAnnId = ann.id;
+            }
+        }
+    } catch (e) {}
+}
+
+async function deleteAnnouncement(id) {
+    if (!confirm('确定删除此公告吗？')) return;
+    const json = await api('delete_announcement', { id });
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) loadAnnouncements();
+}
+
+async function saveAnnouncementAutoClose() {
+    const seconds = parseInt(document.getElementById('ann-auto-close').value) || 5;
+    const json = await api('save_settings', { settings: { announcement_auto_close: String(seconds) } });
+    showToast(json.message, json.success ? 'success' : 'error');
+}
+
+// ==================== 修改密码 ====================
+async function changePassword() {
+    const oldPassword = document.getElementById('pw-old').value;
+    const newPassword = document.getElementById('pw-new').value;
+    if (newPassword.length < 6) return showToast('新密码至少6位', 'error');
+    const json = await api('change_password', {
+        old_password: oldPassword,
+        new_password: newPassword,
+    });
+    showToast(json.message, json.success ? 'success' : 'error');
+    if (json.success) {
+        document.getElementById('pw-old').value = '';
+        document.getElementById('pw-new').value = '';
+    }
+}
+
+// ==================== 退出登录 ====================
+async function logout() {
+    try {
+        await api('logout', {});
+    } catch (e) {}
+    location.replace('login.html');
+}
+
+// ==================== 手机端侧边栏切换 ====================
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('expanded');
+}
+
+document.addEventListener('click', function(e) {
+    var sidebar = document.querySelector('.sidebar');
+    if (window.innerWidth <= 900 && sidebar.classList.contains('expanded')) {
+        if (!sidebar.contains(e.target)) {
+            sidebar.classList.remove('expanded');
+        }
+    }
+});
+
+// ==================== 工具 ====================
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ==================== 启动 ====================
+boot();
+</script>
+</body>
+</html>

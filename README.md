@@ -1,120 +1,89 @@
 # when_holiday · 什么时候放假啊
 
-一个**学期倒计时与进度追踪**项目。同一套产品有三个实现，分别面向不同场景，统一收在本仓库里：
-
-| 目录 | 形态 | 技术栈 | 部署位置 |
-|------|------|--------|----------|
-| [`main`](https://github.com/xxqnspace/when_holiday)（本分支） | 网页 / PWA | PHP 7.4+ + JSON 文件存储 | 宝塔等传统主机 |
-| [`cloudflare`](https://github.com/xxqnspace/when_holiday/tree/cloudflare) | 网页 / PWA（v3.0 主线） | Cloudflare Pages Functions + D1 | Cloudflare Pages |
-| [`desktop`](https://github.com/xxqnspace/when_holiday/tree/desktop) | Windows 桌面悬浮组件 | .NET 8 + WPF | 本机运行（单文件 EXE） |
-
-> 三个实现各占一个分支：`main` 只有 PHP 版，另外两个在 `cloudflare` / `desktop` 分支上，
-> 文件都在各自分支的根目录。切换用 `git checkout cloudflare` / `git checkout desktop`。
-
-网页版的两个实现功能一致：实时显示学期已过百分比、剩余天数、工作日倒计时，附带学期日历视图和管理后台。桌面版则是常驻桌面的无边框倒计时小组件。
+一个**学期倒计时与进度追踪**项目。实时显示学期已过百分比、剩余天数、工作日倒计时，附带学期日历视图、公告栏和管理后台，可装成手机 PWA。另有 Windows 桌面悬浮小组件。
 
 > 用于在枯燥的生活中给予我们前进的力量与希望。
 
----
+## v4.0：Python + SQLite（当前主线）
 
-## 一、PHP 版（`main` 分支）
+`main` 分支根目录就是 **VPS 版**——把原先跑在 Cloudflare Pages + D1 上的后端，等价移植到
+**Python 3 标准库 + 本地 SQLite**，零第三方依赖，一个进程就能跑完整站。
 
-最轻量的一版，上传即用，不需要数据库，也不依赖 Cloudflare 账号。
-
-### 技术栈
+```bash
+python3 app.py          # 默认监听 28417 端口
+```
 
 | 层面 | 技术 |
 |------|------|
-| 后端 | PHP（纯原生，无框架） |
-| 存储 | JSON 文件（`data/db.json.php`，无需数据库） |
-| 前端 | 原生 HTML + CSS + JavaScript + Font Awesome（国内 CDN） |
-| PWA | Service Worker + Manifest |
-| 部署 | 可依托宝塔面板（无需配置数据库） |
+| 运行时 | Python 3.10+ 标准库（`ThreadingHTTPServer`），无第三方包 |
+| 存储 | 本地 SQLite（WAL 模式），`data/holiday.db` |
+| 前端 | 原生 HTML + CSS + JavaScript，静态直出（含 `nosniff`、目录穿越防护） |
+| 认证 | PBKDF2-SHA256 **600000 次** + 会话表 + HttpOnly Cookie + CSRF |
+| 部署 | systemd 常驻进程（`deploy/holiday.service`） |
 
-### 文件说明
+### 相对 Cloudflare 版的差异
+
+| 项目 | Cloudflare 版 | VPS 版 |
+|------|---------------|--------|
+| 运行时 | Pages Functions（Workers，CPU 10ms 上限） | 常驻 Python 进程 |
+| 存储 | D1（远程 SQLite） | 本地 SQLite 文件 |
+| 密码哈希 | PBKDF2-SHA256，3000 次（受免费版限制） | 同算法同格式，**600000 次**（实测 243ms） |
+| 响应头 | Pages 的 `_headers` 文件 | 代码里等价实现 |
+| og:image / og:url | 静态相对路径，需手改 | **按请求 Host 自动补全** |
+| 静态服务 | CDN | 本进程直出 |
+
+接口契约完全一致：路径、请求体字段、`{success,message,data}` 结构、
+`holiday_session` / `holiday_csrf` Cookie、`X-CSRF-Token` 头、
+PBKDF2 存储格式 `pbkdf2$<iter>$<salt>$<hash>` 都没变。
+
+### 目录结构
 
 ```
 /
-├── index.php          # 首页（倒计时 + 日历展示）
-├── admin.php          # 管理面板（登录 + 后台管理）
-├── api.php            # JSON API 接口
-├── config.php         # 默认配置（兜底值）
-├── countdown.php      # 数据处理模块（JSON → 前端配置转换）
-├── date.php           # 日历生成模块
-├── storage.php        # JSON 文件存储层（原子写入 + flock）
-├── data/              # 数据目录（自动创建）
-│   ├── .htaccess      # 禁止 Web 直接访问（Apache）
-│   └── db.json.php    # 数据文件（运行时生成，伪装为 PHP，不入库）
-├── manifest.json      # PWA 清单
-├── sw.js              # Service Worker（离线缓存策略）
-└── icons/             # PWA 图标（72×72 至 512×512）
+├── app.py              # 全部后端 + 静态资源服务（单文件，零依赖）
+├── static/             # 前端：index / admin / login / sw.js / manifest.json / icons
+├── deploy/
+│   ├── DEPLOY-VPS.md   # 部署、运维、备份、回滚说明
+│   └── holiday.service # systemd 单元
+├── data/               # 运行时生成（SQLite + 背景图缓存），已 gitignore
+└── php/                # 旧 PHP 版（见下）
 ```
 
-> ⚠️ 用宝塔部署时，站点根目录指向本分支的文件目录即可；另外两个实现不在 `main` 上，不会被打包进去。
+### 已知限制
 
-### 功能
+1. **没有 HTTPS**：走 `http://IP:28417` 时密码明文传输，Cookie 不带 `Secure`。要安全需套域名 + TLS（Caddy / nginx + Let's Encrypt / Cloudflare Tunnel）。
+2. **PWA 装不上**：非 HTTPS 下浏览器不注册 Service Worker，功能不受影响但无法「添加到主屏幕」。
+3. 单进程 + SQLite，定位是个人使用。
 
-- **学期进度条** — 精确到 6 位小数的百分比进度
-- **总倒计时** — 学期结束的 天:时:分:秒 实时倒计时
-- **工作日倒计时** — 排除周末和自定义假期的有效天数
-- **学期日历** — 按月展示学期范围内的日历，标注已过日期、节假日、工作日、当天，含周次列；大屏默认展开全部月份，手机小屏默认只显示当前月份
-- **公告栏** — 支持 Markdown，可配置展示窗口和自动关闭秒数
-- **PWA 支持** — 安装至手机桌面，支持离线缓存静态资源
-- **可定制 UI** — 主题色、字体色、背景色、进度条颜色均可在管理面板调整；支持纯色或图片背景（毛玻璃效果）
-- **管理面板** — 用户管理、学期配置、界面配色、背景设置、公告管理、修改密码
-
-### 部署
-
-1. 将 PHP 相关文件上传到网站根目录（PHP ≥ 7.4 即可，无需 MySQL）
-2. 首次访问自动创建 `data/db.json.php`，请确保 `data/` 目录有写权限（755/775）
-3. 默认管理员账号：`admin / admin123`，**登录后请立即修改密码**
-4. 可选：如使用 Nginx 且希望更保险，可额外在站点配置加 `location ~ ^/data/ { deny all; }`（非必需）
-
-### 数据存储说明
-
-所有数据（用户、配置、公告）保存在 `data/db.json.php`，首次访问自动创建：
-
-- **文件伪装**：数据文件首行含 `<?php exit; ?>`，浏览器直接访问 URL 只得到空白页
-- **原子写入**：临时文件 + rename，防止写一半损坏
-- **并发安全**：flock 文件锁，读-改-写一体
-- **自动迁移**：兼容旧版 `data/db.json` 纯 JSON 格式
-
-> ⚠️ `data/db.json.php` 含用户密码哈希等敏感信息，已通过 `.gitignore` 排除，不会提交到仓库。
+完整部署与运维（端口、备份、回滚、磁盘占用、壁纸缓存机制）见 [`deploy/DEPLOY-VPS.md`](./deploy/DEPLOY-VPS.md)。
 
 ---
 
-## 二、Cloudflare 版（`cloudflare` 分支）
+## 其他实现
 
-v3.0 起的主线：后端由 PHP 重写为 Pages Functions，存储换成 Cloudflare D1（SQLite），前端逻辑基本沿用 PHP 版。
+| 位置 | 形态 | 技术栈 | 部署位置 |
+|------|------|--------|----------|
+| `php/`（本分支） | 网页 / PWA（旧版 v2.x） | PHP 7.4+ + JSON 文件存储 | 宝塔等传统主机 |
+| [`cloudflare` 分支](https://github.com/xxqnspace/when_holiday/tree/cloudflare) | 网页 / PWA（v3.0） | Cloudflare Pages Functions + D1 | Cloudflare Pages |
+| [`desktop` 分支](https://github.com/xxqnspace/when_holiday/tree/desktop) | Windows 桌面悬浮组件 | .NET 8 + WPF | 本机运行（单文件 EXE） |
 
-```bash
-git checkout cloudflare
-npm install
-npx wrangler d1 migrations apply holiday --local
-npx wrangler pages dev
-```
+### PHP 版（`php/`）
 
-走 Git 集成部署时，Pages 项目选 `when_holiday` 仓库 + `cloudflare` 分支，Root directory 留空，Build output directory 填 `public`。建库、绑定 `DB`、首次登录的完整步骤见该分支的 `README.md`。
+最轻量的一版，上传即用，不需要数据库，也不依赖 Cloudflare 账号。数据存在
+`php/data/db.json.php`（伪装成 PHP 的 JSON，原子写入 + flock）。用宝塔部署时，
+**站点根目录指向 `php/`**，并确保 `php/data/` 可写（755/775）。默认账号
+`admin / admin123`，登录后请立即改密。
 
----
+细节见 [`php/README.md`](./php/README.md)（保留自 PHP 版）。
 
-## 三、桌面组件（`desktop` 分支）
-
-.NET 8 + WPF 的 Windows 桌面悬浮倒计时，无边框透明、置顶、可拖拽缩放，带托盘常驻与开机自启，发布为 self-contained 单文件 EXE。
-
-```bash
-git checkout desktop
-dotnet build
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
-```
-
-细节见该分支的 `README.md`。
+切换分支：`git checkout cloudflare` / `git checkout desktop`。
 
 ---
 
 ## 更新日志
 
-- **v3.2** — 三个实现拆到三个分支：`main` 只保留 PHP 版，`holiday-cf` 与 `desktop-countdown` 分别置于 `cloudflare` 与 `desktop` 分支，文件位于各分支根目录
-- **v3.1** — 仓库整合：`holiday-cf`（Cloudflare 版）与 `desktop-countdown`（桌面组件）并入本仓库，三个实现统一维护
-- **v3.0** — 迁移到 Cloudflare Pages + D1；后端由 PHP 重写为 Pages Functions；密码算法换为 PBKDF2-SHA256；会话改存 D1；日历由服务端渲染改为前端渲染；管理后台拆分为 `admin.html` + `login.html`；修复「编辑公告」实际会新增公告的问题
-- **v2.1** — 存储改为 JSON 文件（去 MySQL）；全站 CSRF 防护；管理界面图标换 Font Awesome（国内 CDN）；日历大屏默认展开全部月份；修复公告列表脱离 Tab、空时间保存为 `:00` 等 Bug
+- **v4.0** — 后端从 Cloudflare Pages Functions + D1 移植为 **Python 3 标准库 + SQLite**，可部署在自己的 VPS；PBKDF2 迭代数从 3000 提到 600000；新增服务端每日壁纸缓存与壁纸信息公告；og 标签按请求 Host 自动补全；前端同步更新（首页、管理面板、登录页）；PHP 版下沉到 `php/`
+- **v3.2** — 三个实现拆到分支：`cloudflare` / `desktop`，`main` 曾只保留 PHP 版
+- **v3.1** — `holiday-cf` 与 `desktop-countdown` 并入本仓库
+- **v3.0** — 迁移到 Cloudflare Pages + D1；后端由 PHP 重写为 Pages Functions；密码换 PBKDF2-SHA256；日历改前端渲染；管理后台拆分为 `admin.html` + `login.html`
+- **v2.1** — 存储改为 JSON 文件（去 MySQL）；全站 CSRF 防护；日历大屏默认展开全部月份
