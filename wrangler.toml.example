@@ -5,11 +5,10 @@
 #   2. 如果你走的是 Git 集成 + Cloudflare 控制台配置（方式一），
 #      **不要**把这个文件改名为 wrangler.toml —— 一旦存在，Pages 会优先读取它，
 #      控制台里的构建配置和 D1 绑定可能被覆盖。
-#   3. 本目录是 when_holiday 仓库的子目录，复制后的 wrangler.toml 应放在 cloudflare/ 下，
-#      所有 wrangler 命令也在 cloudflare/ 内执行。
+#   3. 本文件位于 cloudflare 分支根目录，复制后的 wrangler.toml 也放仓库根目录，
+#      所有 wrangler 命令都在根目录执行。
 #
 # 用法：
-#   cd cloudflare
 #   cp wrangler.toml.example wrangler.toml
 #   # 执行 npx wrangler d1 create holiday，把输出的 database_id 填到下面
 #   # 然后取消 [[d1_databases]] 整段的注释
