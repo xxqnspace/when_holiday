@@ -4,9 +4,12 @@
 
 | 目录 | 形态 | 技术栈 | 部署位置 |
 |------|------|--------|----------|
-| 仓库根目录 | 网页 / PWA | PHP 7.4+ + JSON 文件存储 | 宝塔等传统主机 |
-| [`cloudflare/`](./cloudflare/README.md) | 网页 / PWA（v3.0 主线） | Cloudflare Pages Functions + D1 | Cloudflare Pages |
-| [`desktop/`](./desktop/README.md) | Windows 桌面悬浮组件 | .NET 8 + WPF | 本机运行（单文件 EXE） |
+| [`main`](https://github.com/xxqnspace/when_holiday)（本分支） | 网页 / PWA | PHP 7.4+ + JSON 文件存储 | 宝塔等传统主机 |
+| [`cloudflare`](https://github.com/xxqnspace/when_holiday/tree/cloudflare) | 网页 / PWA（v3.0 主线） | Cloudflare Pages Functions + D1 | Cloudflare Pages |
+| [`desktop`](https://github.com/xxqnspace/when_holiday/tree/desktop) | Windows 桌面悬浮组件 | .NET 8 + WPF | 本机运行（单文件 EXE） |
+
+> 三个实现各占一个分支：`main` 只有 PHP 版，另外两个在 `cloudflare` / `desktop` 分支上，
+> 文件都在各自分支的根目录。切换用 `git checkout cloudflare` / `git checkout desktop`。
 
 网页版的两个实现功能一致：实时显示学期已过百分比、剩余天数、工作日倒计时，附带学期日历视图和管理后台。桌面版则是常驻桌面的无边框倒计时小组件。
 
@@ -14,7 +17,7 @@
 
 ---
 
-## 一、PHP 版（仓库根目录）
+## 一、PHP 版（`main` 分支）
 
 最轻量的一版，上传即用，不需要数据库，也不依赖 Cloudflare 账号。
 
@@ -44,12 +47,10 @@
 │   └── db.json.php    # 数据文件（运行时生成，伪装为 PHP，不入库）
 ├── manifest.json      # PWA 清单
 ├── sw.js              # Service Worker（离线缓存策略）
-├── icons/             # PWA 图标（72×72 至 512×512）
-├── cloudflare/        # Cloudflare Pages + D1 实现（不参与 PHP 部署）
-└── desktop/           # Windows 桌面组件（.NET 8 + WPF）
+└── icons/             # PWA 图标（72×72 至 512×512）
 ```
 
-> ⚠️ 用宝塔部署时，站点根目录指向**本目录**，但 `cloudflare/` 与 `desktop/` 可以不用上传 —— 它们是另外两个实现，传上去也无害，只是 PHP 版用不到。
+> ⚠️ 用宝塔部署时，站点根目录指向本分支的文件目录即可；另外两个实现不在 `main` 上，不会被打包进去。
 
 ### 功能
 
@@ -82,37 +83,38 @@
 
 ---
 
-## 二、Cloudflare 版（`cloudflare/`）
+## 二、Cloudflare 版（`cloudflare` 分支）
 
 v3.0 起的主线：后端由 PHP 重写为 Pages Functions，存储换成 Cloudflare D1（SQLite），前端逻辑基本沿用 PHP 版。
 
 ```bash
-cd cloudflare
+git checkout cloudflare
 npm install
 npx wrangler d1 migrations apply holiday --local
 npx wrangler pages dev
 ```
 
-走 Git 集成部署时，**Root directory 必须填 `cloudflare`**，Build output directory 填 `public`。建库、绑定 `DB`、首次登录的完整步骤见 [`cloudflare/README.md`](./cloudflare/README.md)。
+走 Git 集成部署时，Pages 项目选 `when_holiday` 仓库 + `cloudflare` 分支，Root directory 留空，Build output directory 填 `public`。建库、绑定 `DB`、首次登录的完整步骤见该分支的 `README.md`。
 
 ---
 
-## 三、桌面组件（`desktop/`）
+## 三、桌面组件（`desktop` 分支）
 
 .NET 8 + WPF 的 Windows 桌面悬浮倒计时，无边框透明、置顶、可拖拽缩放，带托盘常驻与开机自启，发布为 self-contained 单文件 EXE。
 
 ```bash
-cd desktop
+git checkout desktop
 dotnet build
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-细节见 [`desktop/README.md`](./desktop/README.md)。
+细节见该分支的 `README.md`。
 
 ---
 
 ## 更新日志
 
-- **v3.1** — 仓库整合：`holiday-cf`（Cloudflare 版）与 `desktop-countdown`（桌面组件）并入本仓库的 `cloudflare/` 与 `desktop/` 目录，三个实现统一维护
+- **v3.2** — 三个实现拆到三个分支：`main` 只保留 PHP 版，`holiday-cf` 与 `desktop-countdown` 分别置于 `cloudflare` 与 `desktop` 分支，文件位于各分支根目录
+- **v3.1** — 仓库整合：`holiday-cf`（Cloudflare 版）与 `desktop-countdown`（桌面组件）并入本仓库，三个实现统一维护
 - **v3.0** — 迁移到 Cloudflare Pages + D1；后端由 PHP 重写为 Pages Functions；密码算法换为 PBKDF2-SHA256；会话改存 D1；日历由服务端渲染改为前端渲染；管理后台拆分为 `admin.html` + `login.html`；修复「编辑公告」实际会新增公告的问题
 - **v2.1** — 存储改为 JSON 文件（去 MySQL）；全站 CSRF 防护；管理界面图标换 Font Awesome（国内 CDN）；日历大屏默认展开全部月份；修复公告列表脱离 Tab、空时间保存为 `:00` 等 Bug
