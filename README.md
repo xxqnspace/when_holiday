@@ -3,6 +3,15 @@
 > 🌿 本分支（`desktop`）是 `when_holiday` 的 Windows 桌面组件实现，项目文件就在分支根目录。
 > 同仓库的 `main` 分支是 PHP 版，`cloudflare` 分支是 Cloudflare Pages 版。
 
+## 下载
+
+最新版见 [Releases](https://github.com/xxqnspace/when_holiday/releases/tag/desktop_v1.2)：
+
+| 文件 | 说明 |
+|------|------|
+| `DesktopCountdown_v1.2.exe` | 自包含单文件版，无需安装 .NET 运行时（约 154 MB） |
+| `DesktopCountdown_v1.2_lite.exe` | 精简版，需自行安装 .NET 8 桌面运行时（约 233 KB） |
+
 ## 构建与运行
 
 ```bash
