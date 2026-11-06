@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>什么时候放假啊o(╥﹏╥)o</title>
     <!-- Open Graph 协议：微信等社交平台分享图文卡片
          部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
@@ -40,10 +40,27 @@
             background-color: var(--page-bg);
             color: var(--font-color);
             min-height: 100vh;
-            padding: max(20px, env(safe-area-inset-top)) 20px 20px;
+            /* 沉浸式状态栏：内容延伸到刘海/灵动岛下方，但上下都留出安全区，
+               头部卡片和按钮不会被状态栏盖住（env 在没有刘海时为 0） */
+            padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
             text-align: center;
             transition: background-color 0.3s;
             position: relative;
+        }
+
+        /* black-translucent 下 iOS 会把状态栏文字画成白色，浅色壁纸上会看不清，
+           所以只在 PWA 独立运行时，在状态栏那一条上叠一层很淡的暗角。
+           只盖 safe-area 的高度、且不接收点击，不会影响任何按钮。 */
+        @media (display-mode: standalone) {
+            body::after {
+                content: '';
+                position: fixed;
+                top: 0; left: 0; right: 0;
+                height: env(safe-area-inset-top, 0px);
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0));
+                pointer-events: none;
+                z-index: 90;
+            }
         }
 
         /* 图片背景模式 */

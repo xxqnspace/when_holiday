@@ -7,6 +7,8 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <meta name="theme-color" content="#f5f6fa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>管理面板 - 登录</title>
     <!-- Open Graph 协议：微信等社交平台分享图文卡片
          部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
@@ -39,7 +41,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
             color: var(--text);
             background-color: var(--bg);
             /* 柔和的品牌色光晕，替代原来那片紫色渐变 */
@@ -48,6 +50,19 @@
                 radial-gradient(circle at 82% 88%, rgba(79, 91, 213, .13), transparent 46%);
             background-attachment: fixed;
             -webkit-font-smoothing: antialiased;
+        }
+
+        /* 沉浸式状态栏：白色状态栏文字垫一层极淡暗角（只覆盖 safe-area，不挡点击） */
+        @media (display-mode: standalone) {
+            body::after {
+                content: '';
+                position: fixed;
+                top: 0; left: 0; right: 0;
+                height: env(safe-area-inset-top, 0px);
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0));
+                pointer-events: none;
+                z-index: 90;
+            }
         }
 
         .login-card {

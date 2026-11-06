@@ -7,6 +7,8 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>管理面板 - 学期倒计时</title>
     <!-- Open Graph 协议：微信等社交平台分享图文卡片
          部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
@@ -60,6 +62,19 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
+        /* 沉浸式状态栏：给白色状态栏文字垫一层极淡的暗角（只覆盖 safe-area，不挡点击） */
+        @media (display-mode: standalone) {
+            body::after {
+                content: '';
+                position: fixed;
+                top: 0; left: 0; right: 0;
+                height: env(safe-area-inset-top, 0px);
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0));
+                pointer-events: none;
+                z-index: 90;
+            }
+        }
+
         /* 权限控制：管理菜单与对应 Tab 仅管理员可见 */
         body:not(.is-admin) .admin-only { display: none !important; }
 
@@ -72,6 +87,10 @@
             width: var(--sidebar-w);
             display: flex;
             flex-direction: column;
+            /* 手机端抽屉是从屏幕顶部拉下来的，给刘海/灵动岛留出安全区，
+               否则 logo 会被状态栏压住、底部退出按钮会贴到 Home 指示条 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
             background: var(--surface);
             border-right: 1px solid var(--border);
             z-index: 100;
@@ -240,7 +259,7 @@
            ============================================================ */
         .main {
             margin-left: var(--sidebar-w);
-            padding: 26px 32px 56px;
+            padding: max(26px, env(safe-area-inset-top)) 32px max(56px, env(safe-area-inset-bottom));
             min-height: 100vh;
         }
         .main-inner {
@@ -737,7 +756,7 @@
 
             .main {
                 margin-left: 0;
-                padding: 16px 16px 48px;
+                padding: max(16px, env(safe-area-inset-top)) 16px max(48px, env(safe-area-inset-bottom));
             }
             .icon-btn { display: inline-flex; }
             .page-head { align-items: center; margin-bottom: 18px; }
