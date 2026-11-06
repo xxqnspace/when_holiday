@@ -539,6 +539,8 @@ def bg_status() -> dict:
     exists = os.path.exists(BG_FILE)
     return {
         "cached": bool(exists and meta.get("date")),
+        "refreshing": bg_refreshing(),
+        "version": bg_version(meta),
         "date": meta.get("date"),
         "is_today": meta.get("date") == today_shanghai(),
         "fetched_at": meta.get("fetched_at"),
@@ -710,18 +712,78 @@ def fetch_upstream(url: str):
     return data, sniffed
 
 
+# 后台刷新状态：同一时刻只允许一个刷新线程，失败后冷却，避免上游异常时被反复打
+_bg_refresh_lock = threading.Lock()
+_bg_refresh_running = False
+_bg_last_attempt = 0.0
+# 自动刷新失败后的冷却秒数（默认 10 分钟）；手动刷新不受此限制
+BG_AUTO_COOLDOWN = int(os.environ.get("BG_AUTO_COOLDOWN", "600"))
+
+
+def bg_refreshing() -> bool:
+    """是否正在后台换图（供 /api/bg_version 与壁纸公告接口判断）。"""
+    with _bg_refresh_lock:
+        return _bg_refresh_running
+
+
+def schedule_bg_refresh() -> bool:
+    """安排一次后台回源；已在刷新或处于失败冷却期则跳过。"""
+    global _bg_refresh_running, _bg_last_attempt
+    with _bg_refresh_lock:
+        if _bg_refresh_running:
+            return False
+        now = time.monotonic()
+        if _bg_last_attempt and now - _bg_last_attempt < BG_AUTO_COOLDOWN:
+            return False
+        _bg_last_attempt = now
+        _bg_refresh_running = True
+
+    def runner():
+        global _bg_refresh_running
+        try:
+            _refresh_bg_locked(force=False)
+        except Exception as exc:
+            print("[bg] 后台刷新异常：%s: %s" % (type(exc).__name__, exc), flush=True)
+        finally:
+            with _bg_refresh_lock:
+                _bg_refresh_running = False
+
+    threading.Thread(target=runner, name="bg-refresh", daemon=True).start()
+    return True
+
+
 def ensure_bg_fresh(force: bool = False) -> dict:
-    """保证今天的背景图已缓存；返回 meta（失败时回退到旧图）。
+    """保证背景图可用，且**不让请求线程等上游**。
+
+    - force=True（管理后台手动刷新）：同步回源，保留成功/失败提示。
+    - 当天缓存可用：直接返回。
+    - 缓存过期但本地有旧图：立刻用旧图（stale-while-revalidate），后台线程换今天的图。
+    - 连旧图都没有：同样交给后台，请求立即返回，前端轮询到新版本后自动补图。
+
+    以前这里在 /api/bg_info 的 _db_lock 内同步跑 25s 拉图 + 20s 拉信息，
+    每天第一次打开会把所有接口一起堵住；现在网络请求一律不占请求线程。
+    """
+    if force:
+        return _refresh_bg_locked(force=True)
+
+    meta = read_bg_meta()
+    if bg_cache_usable(meta):
+        return dict(meta, _ok=True)
+
+    schedule_bg_refresh()
+    if os.path.exists(BG_FILE):
+        return dict(meta, _ok=True, _stale=True)
+    return {}
+
+
+def _refresh_bg_locked(force: bool = False) -> dict:
+    """真正回源刷新（原 ensure_bg_fresh 主体），由 _bg_lock 串行化。
 
     返回值里的标记：
       `_ok`    这次是否真的拿到了可用的图
       `_error` 失败原因（上游坏了 / 内容不是图片 / 没配地址）
-      `_same`  上游给回来的图和缓存的完全一致（基本等于“今天的图还没更新”）
+      `_same`  上游给回来的图和缓存的完全一致（基本等于"今天的图还没更新"）
     """
-    meta = read_bg_meta()
-    if not force and bg_cache_usable(meta):
-        return dict(meta, _ok=True)
-
     with _bg_lock:
         # 等锁期间可能已经被别的请求刷新过
         meta = read_bg_meta()
@@ -1114,6 +1176,17 @@ def route(ctx, header_csrf: str) -> dict:
         return ok({"mode": settings.get("mode") or "online"})
 
     # ---------- 背景图缓存 ----------
+    if action == "bg_version":
+        # 轻量探针：只读 meta 文件，不碰数据库、不发网络请求，
+        # 供前端判断后台换图是否完成（每天首次打开不会被它拖慢）。
+        meta = read_bg_meta()
+        return ok({
+            "version": bg_version(meta),
+            "date": meta.get("date") or "",
+            "refreshing": bg_refreshing(),
+            "has_image": os.path.exists(BG_FILE),
+        })
+
     if action == "bg_info":
         # 首页用：当天壁纸的标题与版权说明。只有展示用文案，不需要登录。
         settings = get_settings(ctx.conn)
@@ -1126,6 +1199,7 @@ def route(ctx, header_csrf: str) -> dict:
         content = render_bg_info_content(settings, title, copy_text) if (title or copy_text) else ""
         return ok({
             "enabled": bool(content),
+            "refreshing": bg_refreshing(),
             "date": meta.get("date") or "",
             "title": title,
             "copyright": copy_text,
@@ -1269,7 +1343,7 @@ def cache_control_for(path: str) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "HolidayVPS/4.0"
+    server_version = "HolidayVPS/4.1"
     protocol_version = "HTTP/1.1"
 
     # ---------- 路由 ----------

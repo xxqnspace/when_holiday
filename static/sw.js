@@ -1,4 +1,4 @@
-const CACHE_NAME = 'semester-countdown-v4';
+const CACHE_NAME = 'semester-countdown-v3';
 const STATIC_URLS = [
     'icons/icon-72.png',
     'icons/icon-96.png',

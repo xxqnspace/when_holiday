@@ -4,7 +4,7 @@
 
 > 用于在枯燥的生活中给予我们前进的力量与希望。
 
-## v4.0：Python + SQLite（当前主线）
+## v4.1：Python + SQLite（当前主线）
 
 `main` 分支根目录就是 **VPS 版**——把原先跑在 Cloudflare Pages + D1 上的后端，等价移植到
 **Python 3 标准库 + 本地 SQLite**，零第三方依赖，一个进程就能跑完整站。
@@ -21,15 +21,28 @@ python3 app.py          # 默认监听 28417 端口
 | 认证 | PBKDF2-SHA256 **600000 次** + 会话表 + HttpOnly Cookie + CSRF |
 | 部署 | systemd 常驻进程（`deploy/holiday.service`） |
 
+### v4.1 变更：壁纸换图不再卡住首页
+
+之前每天第一次打开时，`/api/bg_info` 会在数据库锁里同步跑「拉图 + 拉信息」，
+上游慢的时候会把所有接口一起堵住（最长几十秒）。现在全部改成后台异步：
+
+- **stale-while-revalidate**：有旧图就立刻出旧图，换图交给后台线程，前端轮询 `/api/bg_version` 检测到新版本后自动替换
+- **`/api/bg_version`**：只读一份 meta 文件、不碰数据库、不发网络请求的轻量探针，供前端 1.5s 一次轮询
+- **失败冷却**：自动刷新失败后 10 分钟内不再重试（`BG_AUTO_COOLDOWN` 可调），手动刷新不受限制
+- **壁纸信息公告**：图片信息（标题 / 版权）与图片分开抓取，可单独「立即重抓信息」而不动已缓存的图
+
 ### 相对 Cloudflare 版的差异
 
-| 项目 | Cloudflare 版 | VPS 版 |
+| 项目 | Cloudflare 版（v3.2） | VPS 版 |
 |------|---------------|--------|
 | 运行时 | Pages Functions（Workers，CPU 10ms 上限） | 常驻 Python 进程 |
 | 存储 | D1（远程 SQLite） | 本地 SQLite 文件 |
+| 每日壁纸 | 服务端回源 + **Cache API** 缓存 | 服务端回源 + **磁盘文件**缓存 |
+| 后台换图 | `context.waitUntil()` | 后台线程（同一时刻只允许一个 + 失败冷却） |
+| 图片版本号 | 上游 ETag，无则「日期-字节数」 | 整图 sha1 前 16 位 |
 | 密码哈希 | PBKDF2-SHA256，3000 次（受免费版限制） | 同算法同格式，**600000 次**（实测 243ms） |
 | 响应头 | Pages 的 `_headers` 文件 | 代码里等价实现 |
-| og:image / og:url | 静态相对路径，需手改 | **按请求 Host 自动补全** |
+| og:image / og:url | `functions/_middleware.js` 响应时自动补全 | 按请求 Host 自动补全 |
 | 静态服务 | CDN | 本进程直出 |
 
 接口契约完全一致：路径、请求体字段、`{success,message,data}` 结构、
@@ -82,6 +95,11 @@ PBKDF2 存储格式 `pbkdf2$<iter>$<salt>$<hash>` 都没变。
 
 ## 更新日志
 
+- **v4.1** — 壁纸换图全链路改为后台异步：`/api/bg_info` 不再在数据库锁里同步回源，
+  每天首次打开先用旧图秒开、后台换图后由前端轮询 `/api/bg_version` 自动替换；
+  新增失败冷却（`BG_AUTO_COOLDOWN`，默认 10 分钟）与 `bg_version` 轻量探针；
+  壁纸信息可与图片分开重抓；`cloudflare` 分支同步为 v3.2（同一套能力，图片缓存走 Cache API）；
+  首页 iOS 状态栏改 `black-translucent`、`theme-color` 跟随主题色
 - **v4.0** — 后端从 Cloudflare Pages Functions + D1 移植为 **Python 3 标准库 + SQLite**，可部署在自己的 VPS；PBKDF2 迭代数从 3000 提到 600000；新增服务端每日壁纸缓存与壁纸信息公告；og 标签按请求 Host 自动补全；前端同步更新（首页、管理面板、登录页）；PHP 版下沉到 `php/`
 - **v3.2** — 三个实现拆到分支：`cloudflare` / `desktop`，`main` 曾只保留 PHP 版
 - **v3.1** — `holiday-cf` 与 `desktop-countdown` 并入本仓库

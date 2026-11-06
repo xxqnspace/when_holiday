@@ -6,9 +6,9 @@
     <link rel="icon" href="icons/icon-96.png" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#5c6bc0">
+    <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>什么时候放假啊o(╥﹏╥)o</title>
     <!-- Open Graph 协议：微信等社交平台分享图文卡片
          部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
@@ -852,6 +852,7 @@
 
         // 3.5 每日壁纸信息（标题 + 版权），排在管理员公告之后播放
         loadBgInfoAnnouncement();
+        watchBgRefresh();
 
         // 4. 启动计时器
         setInterval(update, 250);
@@ -992,6 +993,8 @@
         fetch('/api/bg_info').then(function (r) { return r.json(); }).then(function (json) {
             if (!json || !json.success || !json.data || !json.data.enabled) return;
             const info = json.data;
+            // 后台正在换今天的图：先别弹昨天的信息，等 watchBgRefresh 换完再补
+            if (info.refreshing) return;
 
             // 正文与停留时长都由后台「每日壁纸公告」配置决定；
             // 老服务端若没返回 content，就按原来的格式自己拼一份兜底
@@ -1011,6 +1014,49 @@
             queueAnnouncement(text, seconds);
             localStorage.setItem('bg_info_seen', key);
         }).catch(function () {});
+    }
+
+    // ==================== 背景图后台刷新 ====================
+    // 服务端用 stale-while-revalidate：每天首次打开先拿昨天的图秒开，
+    // 后台换好今天的图后这里自动替换 URL，并补上当天的壁纸公告。
+    let bgPollTimer = null;
+    function watchBgRefresh() {
+        const baseVer = config.bg_version || '';
+        let tries = 0;
+        const maxTries = 20;                    // 2s × 20，最多轮询 40s
+        function stop() {
+            if (bgPollTimer) { clearTimeout(bgPollTimer); bgPollTimer = null; }
+        }
+        function tick() {
+            tries += 1;
+            fetch('/api/bg_version', { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    if (!json || !json.success || !json.data) { stop(); return; }
+                    const d = json.data;
+                    if (d.version && d.version !== baseVer) {
+                        // 新版本号直接破掉浏览器 / PWA 里缓存住的旧图
+                        const url = config.bg_image_url || '/bg';
+                        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+                        document.documentElement.style.setProperty(
+                            '--bg-image', 'url(' + url + sep + 'v=' + encodeURIComponent(d.version) + ')');
+                        config.bg_version = d.version;
+                        loadBgInfoAnnouncement();
+                        stop();
+                        return;
+                    }
+                    if (!d.refreshing && tries >= 2) {
+                        // 刷新结束但版本没变（上游还是同一张图 / 拉取失败）：补弹一次公告
+                        loadBgInfoAnnouncement();
+                        stop();
+                        return;
+                    }
+                    if (tries >= maxTries) { stop(); return; }
+                    bgPollTimer = setTimeout(tick, 2000);
+                })
+                .catch(function () { stop(); });
+        }
+        bgPollTimer = setTimeout(tick, 1500);
     }
 
     // ==================== PWA / 注册 Service Worker ====================
