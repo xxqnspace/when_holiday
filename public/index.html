@@ -6,9 +6,9 @@
     <link rel="icon" href="icons/icon-96.png" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#5c6bc0">
+    <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>什么时候放假啊o(╥﹏╥)o</title>
     <!-- Open Graph 协议：微信等社交平台分享图文卡片
          部署后请把下面 og:image / og:url 换成你的实际域名（OG 要求绝对地址） -->
@@ -87,6 +87,7 @@
 
         /* 毛玻璃效果 - 图片背景时启用 */
         body.bg-image header,
+        body.bg-image .announcement-bar,
         body.bg-image .progress-section,
         body.bg-image .countdown-card,
         body.bg-image .calendar-section,
@@ -260,9 +261,24 @@
             box-shadow: var(--shadow);
             overflow: hidden;
             position: relative;
-            animation: slideDown 0.3s ease;
+            animation: slideDown 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+            /* 收起时高度塌陷 + 淡出，下方内容跟着一起平滑上移，不会突然跳一下 */
+            transition:
+                max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+                margin-bottom 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.22s ease-out,
+                transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .announcement-bar.hidden { display: none; }
+        /* 正在收起：淡出并轻微上移；max-height 由 JS 冻结成实际高度后收到 0 */
+        .announcement-bar.leaving {
+            opacity: 0;
+            transform: translateY(-6px);
+            margin-bottom: 0;
+            pointer-events: none;
+        }
+        /* 换下一条公告时内容先淡出再淡入，避免文字硬切 */
+        .announcement-bar.swapping { opacity: 0; }
         .ann-progress {
             height: 3px;
             background: var(--primary-color);
@@ -374,6 +390,7 @@
         bg_type: 'solid',
         bg_color: '#f7f9fc',
         bg_image_url: '',
+        bg_version: '',
         bg_image_opacity: '0.3',
         glass_opacity: '0.7',
         primary_color: '#5c6bc0',
@@ -541,7 +558,10 @@
         // 背景模式
         if (cfg.bg_type === 'image' && cfg.bg_image_url) {
             document.body.classList.add('bg-image');
-            root.style.setProperty('--bg-image', `url(${cfg.bg_image_url})`);
+            // 带上内容版本号：图一换 URL 就变，能直接破掉手机/PWA 里缓存住的旧图（甚至坏图）
+            const sep = cfg.bg_image_url.indexOf('?') >= 0 ? '&' : '?';
+            const ver = cfg.bg_version ? sep + 'v=' + encodeURIComponent(cfg.bg_version) : '';
+            root.style.setProperty('--bg-image', `url(${cfg.bg_image_url}${ver})`);
         } else {
             document.body.classList.remove('bg-image');
             root.style.setProperty('--bg-image', 'none');
@@ -557,11 +577,13 @@
             document.title = cfg.title;
         }
 
+        // 先合并到运行时配置，再渲染依赖它的内容
+        // （原来顺序反了：updateDateInfo 读的是合并前的旧 config，
+        //   导致顶部学期起止时间一直显示默认值，与日历/进度不一致）
+        Object.assign(config, cfg);
+
         // 更新头部学期起止时间
         updateDateInfo();
-
-        // 合并到运行时配置
-        Object.assign(config, cfg);
     }
 
     function applyJSONConfig(jsonSettings) {
@@ -576,6 +598,7 @@
             bg_type: jsonSettings.bg_type || defaultConfig.bg_type,
             bg_color: jsonSettings.bg_color || defaultConfig.bg_color,
             bg_image_url: jsonSettings.bg_image_url || defaultConfig.bg_image_url,
+            bg_version: jsonSettings.bg_version || '',
             bg_image_opacity: jsonSettings.bg_image_opacity || defaultConfig.bg_image_opacity,
             glass_opacity: jsonSettings.glass_opacity || defaultConfig.glass_opacity,
             title: jsonSettings.title || defaultConfig.title,
@@ -823,9 +846,13 @@
             const resp = await fetch('/api/get_announcement');
             const json = await resp.json();
             if (json.success && json.data && json.data.content) {
-                showAnnouncement(json.data.content);
+                queueAnnouncement(json.data.content);
             }
         } catch (e) {}
+
+        // 3.5 每日壁纸信息（标题 + 版权），排在管理员公告之后播放
+        loadBgInfoAnnouncement();
+        watchBgRefresh();
 
         // 4. 启动计时器
         setInterval(update, 250);
@@ -859,18 +886,50 @@
     }
 
     // ==================== 公告消息条 ====================
-    let annTimer = null;
+    let annTimer = null;        // 自动关闭 / 收尾兜底计时器
+    let annSwapTimer = null;    // 换下一条时的淡出计时器
+    const annQueue = [];        // 排队播放：管理员公告优先，其次是每日壁纸信息
 
-    function showAnnouncement(content) {
+    function queueAnnouncement(content, seconds) {
+        const bar = document.getElementById('announcement-bar');
+        const wasIdle = annQueue.length === 0
+            && (bar.classList.contains('hidden') || bar.classList.contains('leaving'));
+        annQueue.push({ content: content, seconds: seconds || 0 });
+        if (wasIdle) showNextAnnouncement();
+    }
+
+    function showNextAnnouncement() {
+        if (annSwapTimer) return;          // 正在淡出换条，交给它接手
+        const item = annQueue.shift();
+        if (!item) { hideAnnouncementBar(); return; }
+
+        const bar = document.getElementById('announcement-bar');
+        const visible = !bar.classList.contains('hidden') && !bar.classList.contains('leaving');
+        if (!visible) { showAnnouncement(item.content, item.seconds); return; }
+
+        // 上一条还在显示：先淡出再换文字，避免生硬切换
+        if (annTimer) { clearTimeout(annTimer); annTimer = null; }
+        bar.classList.add('swapping');
+        annSwapTimer = setTimeout(function () {
+            annSwapTimer = null;
+            bar.classList.remove('swapping');
+            showAnnouncement(item.content, item.seconds);
+        }, 200);
+    }
+
+    function showAnnouncement(content, seconds) {
         const bar = document.getElementById('announcement-bar');
         const contentDiv = document.getElementById('announcement-content');
         const progress = document.getElementById('ann-progress');
 
+        // 从收起状态回来时清掉动画残留，否则高度会卡在 0
+        bar.classList.remove('hidden', 'leaving', 'swapping');
+        bar.style.maxHeight = '';
+
         contentDiv.innerHTML = markdownToHtml(content);
-        bar.classList.remove('hidden');
 
         // 自动关闭进度条
-        const closeSec = parseInt(config.announcement_auto_close) || 5;
+        const closeSec = seconds || parseInt(config.announcement_auto_close) || 5;
         const closeMs = closeSec * 1000;
         progress.style.transition = 'none';
         progress.style.width = '100%';
@@ -880,14 +939,124 @@
         progress.style.width = '0%';
 
         if (annTimer) clearTimeout(annTimer);
-        annTimer = setTimeout(function() {
-            closeAnnouncement();
-        }, closeMs);
+        // 自动关闭后继续播队列里的下一条
+        annTimer = setTimeout(showNextAnnouncement, closeMs);
     }
 
-    function closeAnnouncement() {
-        document.getElementById('announcement-bar').classList.add('hidden');
+    function hideAnnouncementBar() {
+        const bar = document.getElementById('announcement-bar');
         if (annTimer) { clearTimeout(annTimer); annTimer = null; }
+        if (annSwapTimer) { clearTimeout(annSwapTimer); annSwapTimer = null; }
+        bar.classList.remove('swapping');
+        if (bar.classList.contains('hidden') || bar.classList.contains('leaving')) return;
+
+        // 用户关了系统动效：直接收起，不做过渡
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            finishHideAnnouncement();
+            return;
+        }
+
+        // 先冻结成实际高度，才能把 max-height 从「内容多高」平滑收到 0
+        const height = bar.scrollHeight;
+        if (!height) { finishHideAnnouncement(); return; }
+        bar.style.maxHeight = height + 'px';
+        bar.classList.add('leaving');
+        bar.offsetHeight;                  // 强制重排，确保从当前高度开始过渡
+        bar.style.maxHeight = '0px';
+
+        // 兜底：transitionend 万一不触发（元素不可见等），也必须收干净
+        annTimer = setTimeout(finishHideAnnouncement, 600);
+        bar.addEventListener('transitionend', function onEnd(e) {
+            if (e.target !== bar || e.propertyName !== 'max-height') return;
+            bar.removeEventListener('transitionend', onEnd);
+            finishHideAnnouncement();
+        });
+    }
+
+    function finishHideAnnouncement() {
+        if (annTimer) { clearTimeout(annTimer); annTimer = null; }
+        const bar = document.getElementById('announcement-bar');
+        bar.classList.add('hidden');
+        bar.classList.remove('leaving');
+        bar.style.maxHeight = '';
+    }
+
+    // 用户点 ×：整条收起，并且不再继续播剩下的
+    function closeAnnouncement() {
+        annQueue.length = 0;
+        hideAnnouncementBar();
+    }
+
+    // ==================== 每日壁纸信息 ====================
+    // 服务端每天随背景图一起抓 title / copyright；同一张图只弹一次。
+    function loadBgInfoAnnouncement() {
+        fetch('/api/bg_info').then(function (r) { return r.json(); }).then(function (json) {
+            if (!json || !json.success || !json.data || !json.data.enabled) return;
+            const info = json.data;
+            // 后台正在换今天的图：先别弹昨天的信息，等 watchBgRefresh 换完再补
+            if (info.refreshing) return;
+
+            // 正文与停留时长都由后台「每日壁纸公告」配置决定；
+            // 老服务端若没返回 content，就按原来的格式自己拼一份兜底
+            let text = info.content || '';
+            if (!text) {
+                if (!info.title && !info.copyright) return;
+                text = '**今日壁纸：' + (info.title || '每日壁纸') + '**';
+                if (info.copyright) text += '\n' + info.copyright;
+            }
+            const seconds = parseInt(info.seconds, 10) || 9;
+
+            // 去重键带上展示模式：后台改了文案或模式会重新弹一次，方便看到效果
+            const key = (info.info_date || info.date || '') + '|' + (info.title || '') + '|' + (info.mode || 'auto');
+            // 后台开了「每次打开都弹出」时跳过去重；标记照写，关掉该选项后不会补弹一次
+            if (!info.always && localStorage.getItem('bg_info_seen') === key) return;
+
+            queueAnnouncement(text, seconds);
+            localStorage.setItem('bg_info_seen', key);
+        }).catch(function () {});
+    }
+
+    // ==================== 背景图后台刷新 ====================
+    // 服务端用 stale-while-revalidate：每天首次打开先拿昨天的图秒开，
+    // 后台换好今天的图后这里自动替换 URL，并补上当天的壁纸公告。
+    let bgPollTimer = null;
+    function watchBgRefresh() {
+        const baseVer = config.bg_version || '';
+        let tries = 0;
+        const maxTries = 20;                    // 2s × 20，最多轮询 40s
+        function stop() {
+            if (bgPollTimer) { clearTimeout(bgPollTimer); bgPollTimer = null; }
+        }
+        function tick() {
+            tries += 1;
+            fetch('/api/bg_version', { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    if (!json || !json.success || !json.data) { stop(); return; }
+                    const d = json.data;
+                    if (d.version && d.version !== baseVer) {
+                        // 新版本号直接破掉浏览器 / PWA 里缓存住的旧图
+                        const url = config.bg_image_url || '/bg';
+                        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+                        document.documentElement.style.setProperty(
+                            '--bg-image', 'url(' + url + sep + 'v=' + encodeURIComponent(d.version) + ')');
+                        config.bg_version = d.version;
+                        loadBgInfoAnnouncement();
+                        stop();
+                        return;
+                    }
+                    if (!d.refreshing && tries >= 2) {
+                        // 刷新结束但版本没变（上游还是同一张图 / 拉取失败）：补弹一次公告
+                        loadBgInfoAnnouncement();
+                        stop();
+                        return;
+                    }
+                    if (tries >= maxTries) { stop(); return; }
+                    bgPollTimer = setTimeout(tick, 2000);
+                })
+                .catch(function () { stop(); });
+        }
+        bgPollTimer = setTimeout(tick, 1500);
     }
 
     // ==================== PWA / 注册 Service Worker ====================

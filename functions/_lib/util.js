@@ -19,6 +19,16 @@ export function nowShanghai(date = new Date()) {
     .replace('T', ' ');
 }
 
+/** 返回上海时区的 'YYYY-MM-DD'，用于按天判断缓存新鲜度 */
+export function todayShanghai(date = new Date()) {
+  return nowShanghai(date).slice(0, 10);
+}
+
+/** 在 nowShanghai() 的字符串上做加减，返回同样格式的字符串 */
+export function shanghaiPlus(seconds, date = new Date()) {
+  return nowShanghai(new Date(date.getTime() + seconds * 1000));
+}
+
 /** 构造 JSON 响应 */
 export function jsonResponse(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {

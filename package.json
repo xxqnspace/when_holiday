@@ -1,6 +1,6 @@
 {
   "name": "holiday-countdown",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "private": true,
   "description": "什么时候放假啊 - 学期倒计时与进度追踪（Cloudflare Pages + D1）",
   "type": "module",

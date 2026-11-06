@@ -115,6 +115,10 @@ export async function createSession(env, user) {
   const token = randomHex(32);
   const now = Date.now();
 
+  // 顺手清掉过期会话：原来只在读到某条过期记录时才删它，
+  // 从没被读到过的过期行会一直堆在表里。登录频率很低，这条 DELETE 开销可忽略。
+  await env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowShanghai()).run();
+
   await env.DB.prepare(
     `INSERT INTO sessions (token, user_id, username, role, created_at, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)`,

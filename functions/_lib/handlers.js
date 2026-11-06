@@ -11,6 +11,7 @@ import { CSRF_COOKIE, SESSION_COOKIE } from './config.js';
 import { ok, fail, jsonResponse, readJsonBody, parseCookies } from './util.js';
 import {
   ensureSeed,
+  migrateSettings,
   getSettings,
   saveSettings,
   findUserByUsername,
@@ -25,6 +26,14 @@ import {
   deleteAnnouncement,
 } from './db.js';
 import {
+  bgInfoPayload,
+  bgStatusPayload,
+  bgVersionPayload,
+  fetchBgInfo,
+  refreshBg,
+  applyBgInfo,
+} from './bg.js';
+import {
   hashPassword,
   verifyPassword,
   createSession,
@@ -37,6 +46,9 @@ import {
 } from './auth.js';
 
 const VALID_ROLES = ['admin', 'user'];
+
+// 老数据迁移（bg_image_url → /bg）每个 isolate 只跑一次，不必每个请求都查两次库
+let migratedInThisIsolate = false;
 
 // ==================== 入口 ====================
 
@@ -74,11 +86,20 @@ export async function handleApi(context) {
     csrfSetCookie = generated.header;
   }
 
-  const ctx = { request, env, method, action, csrfToken, cookies };
+  const origin = new URL(request.url).origin;
+  const waitUntil = typeof context.waitUntil === 'function'
+    ? context.waitUntil.bind(context)
+    : null;
+
+  const ctx = { request, env, method, action, csrfToken, cookies, origin, waitUntil };
 
   let response;
   try {
     await ensureSeed(env);
+    if (!migratedInThisIsolate) {
+      migratedInThisIsolate = true;
+      await migrateSettings(env).catch((err) => console.error('[migrate]', err && err.message));
+    }
     response = await route(ctx);
   } catch (err) {
     console.error(`[api:${action}]`, err && err.stack ? err.stack : err);
@@ -129,6 +150,18 @@ async function route(ctx) {
       return isPost ? handleSaveSettings(ctx) : postOnly();
     case 'get_mode':
       return handleGetMode(ctx);
+
+    // 背景图（每日壁纸）
+    case 'bg_version':
+      return handleBgVersion(ctx);
+    case 'bg_info':
+      return handleBgInfo(ctx);
+    case 'bg_status':
+      return handleBgStatus(ctx);
+    case 'refresh_bg':
+      return isPost ? handleRefreshBg(ctx) : postOnly();
+    case 'refresh_bg_info':
+      return isPost ? handleRefreshBgInfo(ctx) : postOnly();
 
     // 公告
     case 'get_announcement':
@@ -339,7 +372,11 @@ async function handleDeleteUser(ctx) {
 
 /** GET /api/get_settings —— 公开接口，首页也要读 */
 async function handleGetSettings(ctx) {
-  return ok(await getSettings(ctx.env));
+  const settings = await getSettings(ctx.env);
+  // 图片内容版本号：前端拿它给 /bg 加 ?v=，换图后客户端缓存自动失效
+  const version = await bgVersionPayload(ctx.env);
+  settings.bg_version = version.version;
+  return ok(settings);
 }
 
 /** POST /api/save_settings */
@@ -373,6 +410,79 @@ async function handleSaveSettings(ctx) {
 async function handleGetMode(ctx) {
   const settings = await getSettings(ctx.env);
   return ok({ mode: settings.mode || 'online' });
+}
+
+// ==================== 背景图（每日壁纸） ====================
+
+/**
+ * GET /api/bg_version —— 轻量探针
+ * 只读 bg_cache 一行，不回源、不读配置，供前端轮询"后台换图完成没有"。
+ */
+async function handleBgVersion(ctx) {
+  return ok(await bgVersionPayload(ctx.env));
+}
+
+/**
+ * GET /api/bg_info —— 首页壁纸公告（公开接口）
+ * 顺带触发一次后台回源：首页本来就要图，图还没好时这里先把刷新排上。
+ */
+async function handleBgInfo(ctx) {
+  return ok(await bgInfoPayload(ctx.env, {
+    origin: ctx.origin,
+    waitUntil: ctx.waitUntil,
+  }));
+}
+
+/** GET /api/bg_status —— 后台壁纸状态（仅管理员） */
+async function handleBgStatus(ctx) {
+  const guard = await requireAdmin(ctx);
+  if (guard.error) return guard.error;
+  return ok(await bgStatusPayload(ctx.env));
+}
+
+/** POST /api/refresh_bg —— 手动强制回源（仅管理员） */
+async function handleRefreshBg(ctx) {
+  const guard = await requireAdmin(ctx);
+  if (guard.error) return guard.error;
+
+  const csrfError = requireCsrf(ctx);
+  if (csrfError) return csrfError;
+
+  const settings = await getSettings(ctx.env);
+  const result = await refreshBg(ctx.env, settings, { force: true, origin: ctx.origin });
+  const status = await bgStatusPayload(ctx.env);
+
+  if (!result.ok) {
+    // 拉取失败时保留原背景图，只是提示失败原因
+    return ok(status, `刷新失败，已保留原背景图：${result.error || '上游无响应'}`);
+  }
+  if (result.sameImage) {
+    const suffix = status.retry_at ? `，已安排在 ${status.retry_at} 自动重试` : '';
+    return ok(status, `上游给的还是同一张图（可能今天还没更新）${suffix}`);
+  }
+  return ok(status, '背景图已更新');
+}
+
+/** POST /api/refresh_bg_info —— 只重抓标题/版权，不动已缓存的图（仅管理员） */
+async function handleRefreshBgInfo(ctx) {
+  const guard = await requireAdmin(ctx);
+  if (guard.error) return guard.error;
+
+  const csrfError = requireCsrf(ctx);
+  if (csrfError) return csrfError;
+
+  const settings = await getSettings(ctx.env);
+  if (!settings.bg_info_url) return fail('请先填写图片信息接口地址');
+
+  try {
+    const info = await fetchBgInfo(settings.bg_info_url);
+    await applyBgInfo(ctx.env, info);
+  } catch (err) {
+    console.error('[bg] 手动抓取图片信息失败', err && err.message);
+    return fail(`抓取图片信息失败：${String((err && err.message) || err).slice(0, 120)}`);
+  }
+
+  return ok(await bgStatusPayload(ctx.env), '图片信息已更新');
 }
 
 // ==================== 公告 ====================
