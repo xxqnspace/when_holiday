@@ -1,4 +1,5 @@
-const CACHE_NAME = 'semester-countdown-v3';
+// v4：图标加了 Cloudflare 角标，改缓存名让已安装的 PWA 重新拉一遍
+const CACHE_NAME = 'semester-countdown-v4';
 const STATIC_URLS = [
     'icons/icon-72.png',
     'icons/icon-96.png',
